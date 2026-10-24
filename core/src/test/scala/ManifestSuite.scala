@@ -28,19 +28,43 @@ class ManifestSuite extends FunSuite:
     .asInstanceOf[js.Array[String]]
     .toList
 
-  test("The version is the numeric part of the build's version."):
+  test("A release's version is its own."):
     assertEquals(
-      Manifest.numericVersion("1.2.3+4-abc-SNAPSHOT"),
+      Manifest.numericVersion("1.2.3"),
       "1.2.3",
     )
     assertEquals(Manifest.numericVersion("0.1"), "0.1")
+
+  test("A development version counts the commits since its release."):
     assertEquals(
-      Manifest.numericVersion("SNAPSHOT"),
-      "0",
+      Manifest.numericVersion("1.2.3+4-abc-SNAPSHOT"),
+      "1.2.3.4",
+    )
+    assertEquals(
+      Manifest.numericVersion("1.2.3.4+5-abc"),
+      "1.2.3.4",
     )
     assertEquals(
       manifest(Target.Firefox).version.asInstanceOf[String],
-      "1.2.3",
+      "1.2.3.4",
+    )
+
+  test("A version is never all zeros, which Chrome refuses."):
+    assertEquals(
+      Manifest.numericVersion("0.0.0+3-abc-SNAPSHOT"),
+      "0.0.0.3",
+    )
+    assertEquals(
+      Manifest.numericVersion("0.0.0"),
+      "0.0.0.1",
+    )
+    assertEquals(
+      Manifest.numericVersion("0.0.0.0"),
+      "0.0.0.1",
+    )
+    assertEquals(
+      Manifest.numericVersion("SNAPSHOT"),
+      "0.1",
     )
 
   test("Chrome shows the build's full version beside the numeric one."):
@@ -81,6 +105,41 @@ class ManifestSuite extends FunSuite:
       "sample@example.com",
     )
     assert(js.isUndefined(manifest(Target.Chrome).browser_specific_settings))
+
+  test(
+    "Firefox is told that an extension collects nothing, unless it says otherwise.",
+  ):
+    val permissions = manifest(Target.Firefox)
+      .browser_specific_settings
+      .gecko
+      .data_collection_permissions
+    assertEquals(
+      strings(permissions.required),
+      List("none"),
+    )
+    assert(js.isUndefined(permissions.optional))
+
+  test("Firefox is told what data an extension collects."):
+    val permissions = js
+      .JSON
+      .parse(
+        Describe.files(
+          Collector,
+          "Collector",
+          Build(Target.Firefox, "1", "id"),
+        )("manifest.json"),
+      )
+      .browser_specific_settings
+      .gecko
+      .data_collection_permissions
+    assertEquals(
+      strings(permissions.required),
+      List("browsingActivity", "websiteContent"),
+    )
+    assertEquals(
+      strings(permissions.optional),
+      List("technicalAndInteraction"),
+    )
 
   test("Each content script loads its bootstrap before the bundle."):
     val scripts = manifest(Target.Chrome)
@@ -138,3 +197,16 @@ object Sample extends BrowserExtension[Storage]:
 /** An extension with no parts at all. */
 object Minimal extends BrowserExtension[Any]:
   override val name = "Minimal"
+
+/** An extension that collects data. */
+object Collector extends BrowserExtension[Any]:
+
+  override val name = "Collector"
+
+  override val dataCollection = DataCollection(
+    required = Set(
+      PersonalData.WebsiteContent,
+      PersonalData.BrowsingActivity,
+    ),
+    optional = Set(DataKind.TechnicalAndInteraction),
+  )

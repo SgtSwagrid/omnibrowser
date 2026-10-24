@@ -42,6 +42,10 @@ object OmnibrowserPlugin extends AutoPlugin:
       "The directory of files copied into the extension as they are, such as its icons.",
     )
 
+    val omnibrowserVersion = settingKey[String](
+      "The version of the plugin, and of the libraries that it adds.",
+    )
+
     // Neither is cached, as each runs the bundle and writes its files.
 
     @transient
@@ -69,6 +73,8 @@ object OmnibrowserPlugin extends AutoPlugin:
   private val buildVariable = "OMNIBROWSER_BUILD"
 
   override lazy val projectSettings: Seq[Setting[?]] = Seq(
+    omnibrowserVersion := PluginVersion.current.getOrElse(version.value),
+    libraryDependencies ++= PluginVersion.current.toSeq.flatMap(libraries),
     omnibrowserExtension := None,
     omnibrowserTargets   := Target.values.toSeq,
     omnibrowserGeckoId := s"${ normalizedName.value }@${ organization.value }",
@@ -89,6 +95,15 @@ object OmnibrowserPlugin extends AutoPlugin:
         .Config()
         .withEnv(Map(buildVariable -> layouts("development").value.toString)),
     )),
+  )
+
+  /**
+    * The libraries that an extension uses, at `version`: the library itself,
+    * and the testkit for its tests.
+    */
+  private def libraries(version: String): Seq[ModuleID] = Seq(
+    "com.alecdorrington" %% "omnibrowser-core"    % version,
+    "com.alecdorrington" %% "omnibrowser-testkit" % version % Test,
   )
 
   /** Where the extension is laid out for `mode`, with a directory per target. */
@@ -129,14 +144,14 @@ object OmnibrowserPlugin extends AutoPlugin:
     (layouts: Def.Initialize[Task[Seq[File]]])
     : Def.Initialize[Task[Seq[File]]] = Def.task {
     val prefix = s"${ normalizedName.value }-${ version.value }"
-    layouts
-      .value
-      .map(directory =>
-        Assembly.zip(
-          directory,
-          directory.getParentFile / s"$prefix-${ directory.getName }.zip",
-        ),
-      )
+    val built  = layouts.value
+    built.map(_.getParentFile).distinct.foreach(Assembly.clearZips)
+    built.map(directory =>
+      Assembly.zip(
+        directory,
+        directory.getParentFile / s"$prefix-${ directory.getName }.zip",
+      ),
+    )
   }
 
   /**

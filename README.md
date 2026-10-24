@@ -19,15 +19,13 @@ Add the plugin, which builds the extension, to `project/plugins.sbt`:
 addSbtPlugin("com.alecdorrington" % "sbt-omnibrowser" % "0.1.0")
 ```
 
-Then enable it, and add the library, in your `build.sbt`:
+Then enable it in your `build.sbt`:
 
 ```scala
-lazy val extension = project
-  .enablePlugins(OmnibrowserPlugin)
-  .settings(
-    libraryDependencies += "com.alecdorrington" %% "omnibrowser-core" % "0.1.0",
-  )
+lazy val extension = project.enablePlugins(OmnibrowserPlugin)
 ```
+
+The plugin adds the library, `omnibrowser-core`, and the testkit for your tests, `omnibrowser-testkit`, at its own version, which `omnibrowserVersion` holds.
 
 ## 🚀 Usage
 
@@ -54,18 +52,14 @@ object WordCount extends BrowserExtension[Permission.Storage]:
   )
 ```
 
+Firefox shows the user what personal data an extension collects, and its store requires every new extension to say: override `dataCollection` if yours collects any, as it otherwise declares none.
+
 `sbt omnibrowserBuild` lays it out for Chrome and Firefox, ready to load unpacked, and `sbt omnibrowserPackage` zips a release for each browser's store.
 See [the example](example/src/main/scala/WordCount.scala) for the whole of this extension.
 
 ## 🧪 Testing
 
-Add the testkit to your extension's tests:
-
-```scala
-libraryDependencies += "com.alecdorrington" %% "omnibrowser-testkit" % "0.1.0" % Test
-```
-
-`FakeBrowser` is a browser that keeps everything in memory.
+`FakeBrowser`, from the testkit, is a browser that keeps everything in memory.
 A test installs the extension into it, acts as the user would, and checks what the extension did:
 
 ```scala
