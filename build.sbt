@@ -1,5 +1,4 @@
 import com.alecdorrington.omnibrowser.plugin.OmnibrowserPlugin
-import com.alecdorrington.omnibrowser.plugin.OmnibrowserPlugin.autoImport.*
 import IdeSettings.packagePrefix
 import org.scalajs.sbtplugin.ScalaJSPlugin
 import sbt._
@@ -28,6 +27,16 @@ lazy val `omnibrowser-core` = project
     Dependencies.munit,
   )
 
+/** An in-memory fake browser, for testing extensions written with the library. */
+lazy val `omnibrowser-testkit` = project
+  .in(file("testkit"))
+  .dependsOn(`omnibrowser-core`)
+  .enablePlugins(ScalaJSPlugin)
+  .settings(
+    packagePrefix := s"$projectRoot.testkit",
+    Dependencies.munitCatsEffect,
+  )
+
 /** The sbt plugin that builds extensions written with the library. */
 lazy val `sbt-omnibrowser` = project
   .in(file("sbt-omnibrowser"))
@@ -43,25 +52,26 @@ lazy val `sbt-omnibrowser` = project
 /** An extension built with the library and the plugin, as a test of both. */
 lazy val `omnibrowser-example` = project
   .in(file("example"))
-  .dependsOn(`omnibrowser-core`)
+  .dependsOn(`omnibrowser-core`, `omnibrowser-testkit` % Test)
   .enablePlugins(OmnibrowserPlugin)
   .settings(
     packagePrefix  := s"$projectRoot.example",
     publish / skip := true,
-    Dependencies.munit,
-
-    // The tests check the extension as the plugin builds it.
-    Test / testFull :=
-      Def.uncached((Test / testFull).dependsOn(omnibrowserBuild).value),
+    Dependencies.munitCatsEffect,
   )
 
 lazy val omnibrowser = project
   .in(file("."))
   .enablePlugins(ScalaUnidocPlugin)
-  .aggregate(`omnibrowser-core`, `sbt-omnibrowser`, `omnibrowser-example`)
+  .aggregate(
+    `omnibrowser-core`,
+    `omnibrowser-testkit`,
+    `sbt-omnibrowser`,
+    `omnibrowser-example`,
+  )
   .settings(
     publish / skip := true,
     ScalaUnidoc / unidoc / unidocProjectFilter :=
-      inProjects(`omnibrowser-core`),
+      inProjects(`omnibrowser-core`, `omnibrowser-testkit`),
     ScalaUnidoc / unidoc / scalacOptions ++= Seq("-project", "Omnibrowser"),
   )

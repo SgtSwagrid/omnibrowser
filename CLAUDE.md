@@ -16,7 +16,11 @@ This is a Scala library for writing browser extensions against a typed model of 
 - `core` (Scala.js): the model (`BrowserExtension`, contexts, `Browser`, `Endpoint`, `StorageKey`, `Codec`, type-level `Permission`s), its implementation over the WebExtensions API (`webext`), and the bundle's entry point (`launch`).
 - `sbt-omnibrowser` (JVM, sbt 2 plugin): links one classic-script bundle shared by every context, then runs it under Node to have it write its own `manifest.json`, bootstraps and HTML for each target (`launch.Describe`).
   Each context loads a small bootstrap, naming its role, before the bundle.
-- `example`: an extension built with both, whose `testFull` runs `omnibrowserBuild` first. The output is under `target/out/sjs1/scala-3.9.0/omnibrowser-example/omnibrowser/`.
+- `testkit` (Scala.js): `FakeBrowser`, an in-memory fake of the WebExtensions API (`FakeApi`, one per context, over shared `Simulation` state).
+  `InProcess` runs an extension's code through the real `Launcher` and `WebExtensionBrowser`; `Built` runs the plugin's output in Node `vm` sandboxes.
+  Actions settle by polling `Activity` until it has been idle for a moment.
+- `example`: an extension built with both, and tested with the testkit in both ways. The output is under `target/out/sjs1/scala-3.9.0/omnibrowser-example/omnibrowser/`.
+- The plugin makes every test run build the extension first (through `Test / jsEnvInput`, as `test` is an input task in sbt 2), and tells the tests where it is through `OMNIBROWSER_BUILD`.
 
 ### Gotchas
 
@@ -24,6 +28,8 @@ This is a Scala library for writing browser extensions against a typed model of 
 - In sbt 2, a task returning `File` must have its key marked `@transient`, or be wrapped in `Def.uncached`.
 - A `/*` in a comment, as in a match pattern like `https://*/*`, opens a nested comment in Scala.
 - On this Windows machine, `sbt` cannot start its server (the space in the Java path). Run it in-process instead: `java -jar "C:/Program Files (x86)/sbt/bin/sbt-launch.jar" <commands>`.
+  The machine is often short of memory: an `OutOfMemoryError`, a `hs_err_pid*.log`, or Node exiting with `-1073740791` means retrying later or with a smaller `-Xmx`, not a bug. Delete any `hs_err_pid*.log` and `replay_pid*.log` left behind.
+- In a non-native JS class (`extends js.Object`), a Scala-side check like `x.isInstanceOf[FakeDocument]` on a `js.Dynamic` warns that it is always false; widen `x` to `Any` first.
 
 ## Instructions
 
