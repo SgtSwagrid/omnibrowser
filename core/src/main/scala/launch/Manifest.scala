@@ -120,6 +120,7 @@ private[omnibrowser] object Manifest:
         )),
       ),
       entry("run_at", script.runAt.id),
+      entryIf(script.css.nonEmpty)("css", strings(script.css)),
     )
 
   private def icons(extension: BrowserExtension[?]): js.Object = entries(

@@ -159,6 +159,21 @@ class ManifestSuite extends FunSuite:
       "document_start",
     )
 
+  test("A content script's stylesheets are injected with it."):
+    val scripts = manifest(Target.Firefox)
+      .content_scripts
+      .asInstanceOf[js.Array[js.Dynamic]]
+    assertEquals(
+      strings(scripts(0).css),
+      List("content.css"),
+    )
+
+  test("A page's body and stylesheets come before its scripts."):
+    val html = files(Target.Chrome)("popup.html")
+    assert(html.contains("""<link rel="stylesheet" href="popup.css">"""))
+    assert(html.indexOf("popup.css") < html.indexOf("</head>"))
+    assert(html.indexOf("""<main id="app">""") < html.indexOf("popup.js"))
+
   test("The popup is a page that loads its bootstrap before the bundle."):
     assertEquals(
       manifest(Target.Chrome).action.default_popup.asInstanceOf[String],
@@ -189,10 +204,17 @@ object Sample extends BrowserExtension[Storage]:
 
   override val background = Background(onStartup(_ => IO.unit))
 
-  override val contentScripts =
-    Seq(ContentScript("https://*/*")(_ => IO.unit).at(RunAt.Start))
+  override val contentScripts = Seq(
+    ContentScript("https://*/*")(_ => IO.unit)
+      .at(RunAt.Start)
+      .withCss("content.css"),
+  )
 
-  override val popup = Some(Page(_ => IO.unit))
+  override val popup = Some(
+    Page(_ => IO.unit)
+      .withBody("""<main id="app"></main>""")
+      .withStylesheets("popup.css"),
+  )
 
 /** An extension with no parts at all. */
 object Minimal extends BrowserExtension[Any]:
