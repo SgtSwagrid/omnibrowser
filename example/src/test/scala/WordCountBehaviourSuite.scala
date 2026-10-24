@@ -50,6 +50,12 @@ class WordCountBehaviourSuite extends CatsEffectSuite:
         .flatMap(_.stored(WordCount.total))
         .assertEquals(0)
 
+  test("Words in any script are counted, but not punctuation."):
+    FakeBrowser
+      .install(WordCount)
+      .flatMap(_.call(WordCount.count)("héllo, привет — 世界 42!"))
+      .assertEquals(4)
+
   test("The background counts the words in whatever text it is sent."):
     FakeBrowser
       .install(WordCount)

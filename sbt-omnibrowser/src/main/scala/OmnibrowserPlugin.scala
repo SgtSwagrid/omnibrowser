@@ -1,7 +1,7 @@
 package com.alecdorrington.omnibrowser.plugin
 
 import org.scalajs.jsenv.nodejs.NodeJSEnv
-import org.scalajs.linker.interface.{OutputPatterns, Report}
+import org.scalajs.linker.interface.{ESVersion, OutputPatterns, Report}
 import org.scalajs.sbtplugin.ScalaJSPlugin
 import org.scalajs.sbtplugin.ScalaJSPlugin.autoImport.*
 import sbt.{*, given}
@@ -63,6 +63,9 @@ object OmnibrowserPlugin extends AutoPlugin:
   /** The class that the object defining an extension extends. */
   private val extensionClass = "com.alecdorrington.omnibrowser.BrowserExtension"
 
+  /** The ECMAScript version that every extension's bundle is linked for. */
+  private val esVersion = ESVersion.ES2021
+
   /** The entry point of every extension's bundle. */
   private val entry = "com.alecdorrington.omnibrowser.launch.Entry"
 
@@ -83,6 +86,13 @@ object OmnibrowserPlugin extends AutoPlugin:
     Compile / mainClass             := Some(entry),
     Compile / scalaJSLinkerConfig ~=
       (_.withOutputPatterns(OutputPatterns.fromJSFile(Assembly.bundle))),
+
+    // Every browser that runs Manifest V3 runs ES2021, which Scala.js needs
+    // for the whole of java.util.regex, such as Unicode classes like \p{L}.
+    Compile / scalaJSLinkerConfig ~=
+      (_.withESFeatures(_.withESVersion(esVersion))),
+    Test / scalaJSLinkerConfig ~=
+      (_.withESFeatures(_.withESVersion(esVersion))),
     omnibrowserBuild   := assemble(fastLinkJS, "development").value,
     omnibrowserPackage := zip(assemble(fullLinkJS, "release")).value,
 
