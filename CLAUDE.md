@@ -25,6 +25,7 @@ This is a Scala library for writing browser extensions against a typed model of 
 ### Gotchas
 
 - The plugin's sources are also compiled into the build definition (`project/plugins-omnibrowser.sbt`), so the build can use its own plugin. A broken plugin breaks loading the build, and the plugin must compile with sbt's own Scala version (3.8.4).
+- The published plugin adds `omnibrowser-core` and `omnibrowser-testkit` at the version in its jar's manifest (`PluginVersion`). Compiled into this build's definition it has none, so it adds nothing, and the example depends on the projects directly.
 - In sbt 2, a task returning `File` must have its key marked `@transient`, or be wrapped in `Def.uncached`.
 - A `/*` in a comment, as in a match pattern like `https://*/*`, opens a nested comment in Scala.
 - On this Windows machine, `sbt` cannot start its server (the space in the Java path). Run it in-process instead: `java -jar "C:/Program Files (x86)/sbt/bin/sbt-launch.jar" <commands>`.

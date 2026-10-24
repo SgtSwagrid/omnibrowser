@@ -67,6 +67,9 @@ object Assembly:
   /** The name of the linked bundle, which every part of an extension loads. */
   val bundle = "omnibrowser.js"
 
+  /** Deletes the zips in `directory`, such as those of earlier versions. */
+  def clearZips(directory: File): Unit = IO.delete((directory * "*.zip").get())
+
   /** Zips the extension laid out in `directory` into `zip`. */
   def zip(directory: File, zip: File): File =
     IO.zip(Path.allSubpaths(directory), zip, None)

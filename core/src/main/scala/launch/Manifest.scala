@@ -1,6 +1,8 @@
 package com.alecdorrington.omnibrowser.launch
 
-import com.alecdorrington.omnibrowser.{BrowserExtension, ContentScript, Target}
+import com.alecdorrington.omnibrowser.{
+  BrowserExtension, ContentScript, DataCollection, Target,
+}
 import scala.scalajs.js
 
 /** The `manifest.json` of an extension, as each browser expects it. */
@@ -40,18 +42,36 @@ private[omnibrowser] object Manifest:
     ),
     entryIf(build.target == Target.Firefox)(
       "browser_specific_settings",
-      gecko(build.geckoId),
+      gecko(
+        build.geckoId,
+        extension.dataCollection,
+      ),
     ),
   )
 
   /**
-    * The longest prefix of `version` that browsers accept as a version, being
-    * up to four numbers, such as `1.2.3` of `1.2.3+4-abcdef12-SNAPSHOT`.
+    * `version` as browsers accept it: up to four numbers, not all zero. A
+    * development version, such as `1.2.3+4-abcdef12-SNAPSHOT` from
+    * `sbt-dynver`, has the number of commits since its tag as a fourth, as in
+    * `1.2.3.4`, so that it is newer than the release it follows.
     */
-  def numericVersion(version: String): String = """^\d+(\.\d+){0,3}"""
-    .r
-    .findFirstIn(version)
-    .getOrElse("0")
+  def numericVersion(version: String): String = nonZero(numbers(version))
+    .mkString(".")
+
+  private val versionPattern = """(\d+(?:\.\d+){0,3})(?:\+(\d+))?""".r
+
+  /** The numbers at the start of `version`, with any commit distance. */
+  private def numbers(version: String): Seq[String] = versionPattern
+    .findPrefixMatchOf(version)
+    .fold(Seq("0"))(found =>
+      val release = found.group(1).split('.').toSeq
+      release ++ Option(found.group(2)).filter(_ => release.size < 4),
+    )
+
+  /** `numbers`, with a last `1` added if all are zero, as Chrome refuses. */
+  private def nonZero(numbers: Seq[String]): Seq[String] =
+    if numbers.exists(_.exists(_ != '0')) then numbers
+    else numbers.take(3) :+ "1"
 
   /**
     * Whether to show the full version beside the numeric one, as only Chrome
@@ -110,8 +130,37 @@ private[omnibrowser] object Manifest:
       .map((size, path) => entry(size.toString, path))*,
   )
 
-  private def gecko(id: String): js.Object =
-    entries(entry("gecko", entries(entry("id", id))))
+  /**
+    * What Firefox alone needs: the extension's ID, and the data that it
+    * collects, which Firefox shows the user on installing it.
+    */
+  private def gecko(id: String, collection: DataCollection): js.Object =
+    entries(entry(
+      "gecko",
+      entries(
+        entry("id", id),
+        entry(
+          "data_collection_permissions",
+          dataCollection(collection),
+        ),
+      ),
+    ))
+
+  private def dataCollection(collection: DataCollection): js.Object = entries(
+    entry(
+      "required",
+      strings(required(collection)),
+    ),
+    entryIf(collection.optional.nonEmpty)(
+      "optional",
+      strings(collection.optional.map(_.id).toSeq.sorted),
+    ),
+  )
+
+  /** The kinds of data required, or `none`, as Firefox asks for no kinds. */
+  private def required(collection: DataCollection): Seq[String] =
+    if collection.required.isEmpty then Seq("none")
+    else collection.required.map(_.id).toSeq.sorted
 
   private def entries(fields: Option[(String, js.Any)]*): js.Object = js
     .Dictionary(fields.flatten*)

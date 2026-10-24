@@ -37,6 +37,12 @@ abstract class BrowserExtension[P : Permissions as P]:
   /** The page in which the user changes the extension's settings. */
   def options: Option[Page] = None
 
+  /**
+    * The data that the extension collects or sends elsewhere, which Firefox
+    * shows the user on installing it.
+    */
+  def dataCollection: DataCollection = DataCollection.none
+
   /** The manifest names of the extension's permissions. */
   final def permissions: Set[String] = P.names
 
