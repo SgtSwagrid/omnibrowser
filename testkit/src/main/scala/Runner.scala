@@ -20,6 +20,15 @@ private[testkit] trait Runner:
   /** The manifest names of the extension's permissions. */
   def permissions: Set[String]
 
+  /** The pages that the extension may access, as match patterns. */
+  def hosts: Seq[String]
+
+  /** The manifest names of the permissions that the extension may ask for. */
+  def optionalPermissions: Set[String]
+
+  /** The pages that the extension may ask to access, as match patterns. */
+  def optionalHosts: Seq[String]
+
   /** The match patterns of each content script, in order. */
   def contentScripts: Seq[Seq[String]]
 
@@ -70,6 +79,13 @@ private[testkit] final class InProcess
 
   override def permissions: Set[String] = extension.permissions
 
+  override def hosts: Seq[String] = extension.hosts
+
+  override def optionalPermissions: Set[String] =
+    extension.optionalPermissions.names
+
+  override def optionalHosts: Seq[String] = extension.optionalHosts
+
   override def contentScripts: Seq[Seq[String]] = extension
     .contentScripts
     .map(_.matches)
@@ -110,7 +126,7 @@ private[testkit] final class InProcess
     .asInstanceOf[WebExtensionApi]
 
   private def browser(context: FakeContext): WebExtensionBrowser =
-    WebExtensionBrowser(api(context))
+    WebExtensionBrowser(api(context), launch)
 
   /** Makes `document` the global document, unless the tests have a DOM. */
   private def show(document: FakeDocument): Unit =
@@ -138,6 +154,14 @@ private[testkit] final class Built
 
   override def permissions: Set[String] =
     strings(field(manifest, "permissions")).toSet
+
+  override def hosts: Seq[String] = strings(field(manifest, "host_permissions"))
+
+  override def optionalPermissions: Set[String] =
+    strings(field(manifest, "optional_permissions")).toSet
+
+  override def optionalHosts: Seq[String] =
+    strings(field(manifest, "optional_host_permissions"))
 
   override def contentScripts: Seq[Seq[String]] =
     scripts.map(script => strings(field(script, "matches")))

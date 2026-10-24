@@ -34,6 +34,12 @@ object Permissions:
   /** The names of the permissions in `P`, as the compiler finds them. */
   inline given derived[P]: Permissions[P] = ${ derive[P] }
 
+  /** The names of the permissions in `Q`, such as `Permission.Tabs`. */
+  inline def of[Q]: Permissions[Q] = derived[Q]
+
+  /** No permissions at all. */
+  val none: Permissions[Any] = Permissions(Set.empty)
+
   private def derive[P : Type](using q: Quotes): Expr[Permissions[P]] =
     val permissions = Expr(names(q.reflect.TypeRepr.of[P]))
     '{ Permissions[P]($permissions) }
