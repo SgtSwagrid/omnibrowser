@@ -13,7 +13,7 @@ import scala.scalajs.js
   * Starts each part of an extension in the browser, starting each program that
   * a part runs with `launch`, which does not wait for it to finish.
   */
-private[omnibrowser] final class Launcher(launch: IO[Unit] => Unit):
+private[omnibrowser] final class Launcher(val launch: IO[Unit] => Unit):
 
   /**
     * Registers the handlers of the extension's background. The browser gives an
@@ -102,5 +102,19 @@ private[omnibrowser] final class Launcher(launch: IO[Unit] => Unit):
 
 private[omnibrowser] object Launcher:
 
-  /** Starts each program without waiting, reporting any failure to the console. */
-  val default: Launcher = Launcher(_.unsafeRunAndForget())
+  /**
+    * Starts each program at once, running it without pausing until its first
+    * asynchronous step, and the rest without waiting, reporting any failure to
+    * the console.
+    */
+  val default: Launcher = Launcher(program =>
+    program
+      .handleErrorWith(report)
+      .syncStep(Int.MaxValue)
+      .unsafeRunSync()
+      .left
+      .foreach(_.unsafeRunAndForget()),
+  )
+
+  private def report(error: Throwable): IO[Unit] =
+    IO(global.compute.reportFailure(error))

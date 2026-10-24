@@ -9,10 +9,11 @@ import scala.scalajs.js
 @js.native
 private[omnibrowser] trait WebExtensionApi extends js.Object:
 
-  val runtime: RuntimeApi = js.native
-  val storage: StorageApi = js.native
-  val tabs: TabsApi       = js.native
-  val action: ActionApi   = js.native
+  val runtime: RuntimeApi         = js.native
+  val storage: StorageApi         = js.native
+  val tabs: TabsApi               = js.native
+  val action: ActionApi           = js.native
+  val permissions: PermissionsApi = js.native
 
 private[omnibrowser] object WebExtensionApi:
 
@@ -99,6 +100,13 @@ private[omnibrowser] trait TabApi extends js.Object:
   val active: Boolean           = js.native
   val url: js.UndefOr[String]   = js.native
   val title: js.UndefOr[String] = js.native
+
+@js.native
+private[omnibrowser] trait PermissionsApi extends js.Object:
+
+  def request(permissions: js.Object): js.Promise[Boolean]  = js.native
+  def contains(permissions: js.Object): js.Promise[Boolean] = js.native
+  def remove(permissions: js.Object): js.Promise[Boolean]   = js.native
 
 @js.native
 private[omnibrowser] trait ActionApi extends js.Object:

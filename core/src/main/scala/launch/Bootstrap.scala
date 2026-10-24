@@ -63,7 +63,7 @@ private[omnibrowser] object Bootstrap:
   def start(bootstrap: Bootstrap): Unit =
     val extension    = load(bootstrap.extension)
     lazy val api     = WebExtensionApi.current
-    lazy val browser = WebExtensionBrowser(api)
+    lazy val browser = WebExtensionBrowser(api, Launcher.default.launch)
     bootstrap.role match
       case Role.Background =>
         Launcher.default.background(extension, browser, api)

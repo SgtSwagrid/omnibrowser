@@ -54,6 +54,16 @@ object WordCount extends BrowserExtension[Permission.Storage]:
 
 A content script's stylesheets come with it, as in `ContentScript(...)(...).withCss("content.css")`, and a page may begin with a body and stylesheets of its own, as in `Page(...).withBody("<main></main>").withStylesheets("popup.css")`, each a path among the assets in `src/main/extension`.
 
+The pages that an extension may access, such as the APIs that its background calls, are its `hosts`. It may also ask the user for `optionalPermissions` and `optionalHosts` while it runs, through `browser.grants`, which gives evidence of a permission once the user grants it:
+
+```scala
+browser.grants.request[Permission.Tabs].flatMap:
+  case Some(granted) => ... // `given Granted[Permission.Tabs] = granted` unlocks the APIs it covers.
+  case None          => ... // The user refused.
+```
+
+The browser asks the user only in response to their input, so a page's DOM event handler starts such a program with `browser.run(program)`, which runs it at once.
+
 Messages and stored values hold JSON, through a `Codec`: there are codecs of the usual types, and `derives Codec` makes one of a case class, enum or sealed trait.
 
 Firefox shows the user what personal data an extension collects, and its store requires every new extension to say: override `dataCollection` if yours collects any, as it otherwise declares none.

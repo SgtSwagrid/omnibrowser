@@ -23,6 +23,9 @@ private[testkit] final class FakeApi
   val action: js.UndefOr[FakeAction] =
     if context.kind.isContent then js.undefined else FakeAction(simulation)
 
+  val permissions: js.UndefOr[FakePermissions] =
+    if context.kind.isContent then js.undefined else FakePermissions(simulation)
+
 /** An event, to which the extension adds listeners. */
 private[testkit] final class FakeEvent extends js.Object:
 
@@ -101,13 +104,39 @@ private[testkit] final class FakeAction
 
   def setBadgeText(details: js.Dynamic): js.Promise[Unit] = js
     .Promise
-    .resolve(simulation.setBadge(details.text.asInstanceOf[String]))
+    .resolve(simulation.setBadge(
+      details.text.asInstanceOf[String],
+      tabOf(details),
+    ))
 
   def setBadgeBackgroundColor(details: js.Dynamic): js.Promise[Unit] = js
     .Promise
-    .resolve(simulation.setBadgeColour(details.color.asInstanceOf[String]))
+    .resolve(simulation.setBadgeColour(
+      details.color.asInstanceOf[String],
+      tabOf(details),
+    ))
 
   val onClicked: FakeEvent = FakeEvent()
+
+  /** The tab that `details` names, if any, or else every tab. */
+  private def tabOf(details: js.Dynamic): Option[Int] = Option.unless(
+    js.isUndefined(details.tabId),
+  )(details.tabId.asInstanceOf[Int])
+
+private[testkit] final class FakePermissions
+  (simulation: Simulation)
+  extends js.Object:
+
+  def request(asked: js.Dynamic): js.Promise[Boolean] =
+    simulation.request(asked)
+
+  def contains(asked: js.Dynamic): js.Promise[Boolean] = js
+    .Promise
+    .resolve(simulation.holds(asked))
+
+  def remove(asked: js.Dynamic): js.Promise[Boolean] = js
+    .Promise
+    .resolve(simulation.revoke(asked))
 
 /** A page's document, which holds only a body of text and a title. */
 private[testkit] final class FakeDocument

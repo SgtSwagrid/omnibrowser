@@ -7,10 +7,20 @@ import com.alecdorrington.omnibrowser.webext.Interop.{events, promise}
 import fs2.Stream
 import scala.scalajs.js
 
-/** The browser, through the WebExtensions API. */
+/**
+  * The browser, through the WebExtensions API, which starts the programs that
+  * the extension runs with `launch`.
+  */
 private[omnibrowser] final class WebExtensionBrowser
-  (api: WebExtensionApi)
+  (
+    api: WebExtensionApi,
+    launch: IO[Unit] => Unit,
+  )
   extends Browser:
+
+  override def run(program: IO[Unit]): Unit = launch(program)
+
+  override lazy val grants: Browser.Grants = WebExtensionGrants(api.permissions)
 
   override lazy val runtime: Browser.Runtime = WebExtensionRuntime(api.runtime)
 
@@ -115,5 +125,44 @@ private[omnibrowser] final class WebExtensionAction
   override def setBadge(text: String): IO[Unit] =
     promise(api.setBadgeText(js.Dynamic.literal(text = text)))
 
+  override def setBadge(text: String, tab: TabId): IO[Unit] = promise(
+    api.setBadgeText(js.Dynamic.literal(text = text, tabId = tab.toInt)),
+  )
+
   override def setBadgeColour(colour: String): IO[Unit] =
     promise(api.setBadgeBackgroundColor(js.Dynamic.literal(color = colour)))
+
+  override def setBadgeColour(colour: String, tab: TabId): IO[Unit] =
+    promise(api.setBadgeBackgroundColor(
+      js.Dynamic.literal(color = colour, tabId = tab.toInt),
+    ))
+
+private[omnibrowser] final class WebExtensionGrants
+  (api: PermissionsApi)
+  extends Browser.Grants:
+
+  override def request[Q : Permissions as Q]: IO[Option[Granted[Q]]] =
+    promise(api.request(named(Q))).map(evidence[Q])
+
+  override def granted[Q : Permissions as Q]: IO[Option[Granted[Q]]] =
+    promise(api.contains(named(Q))).map(evidence[Q])
+
+  override def revoke[Q : Permissions as Q]: IO[Unit] =
+    promise(api.remove(named(Q))).void
+
+  override def requestHosts(patterns: String*): IO[Boolean] =
+    promise(api.request(hosts(patterns)))
+
+  override def hasHosts(patterns: String*): IO[Boolean] =
+    promise(api.contains(hosts(patterns)))
+
+  private def named(permissions: Permissions[?]): js.Object = js
+    .Dynamic
+    .literal(permissions = js.Array(permissions.names.toSeq*))
+
+  private def hosts(patterns: Seq[String]): js.Object = js
+    .Dynamic
+    .literal(origins = js.Array(patterns*))
+
+  private def evidence[Q](granted: Boolean): Option[Granted[Q]] =
+    Option.when(granted)(Granted[Q]())

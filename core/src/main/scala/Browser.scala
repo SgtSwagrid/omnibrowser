@@ -12,6 +12,14 @@ trait ContentBrowser:
   /** The values that the extension keeps. */
   def storage(using Granted[Permission.Storage]): Browser.Storage
 
+  /**
+    * Starts `program` at once without waiting, as from the handler of a DOM
+    * event. It runs without pausing until its first asynchronous step, so that
+    * an API that needs the user's input, as [[Browser.Grants.request]] does,
+    * still sees it. Any failure is reported to the console.
+    */
+  def run(program: IO[Unit]): Unit
+
 /** The browser, as the extension's background and pages see it. */
 trait Browser extends ContentBrowser:
 
@@ -20,6 +28,9 @@ trait Browser extends ContentBrowser:
 
   /** The extension's toolbar button. */
   def action: Browser.Action
+
+  /** The optional permissions that the user grants while the extension runs. */
+  def grants: Browser.Grants
 
 object Browser:
 
@@ -80,8 +91,48 @@ object Browser:
     /** Shows `text` on the button, or nothing if it is empty. */
     def setBadge(text: String): IO[Unit]
 
+    /**
+      * Shows `text` on the button while `tab` is active, in place of the text
+      * shown in every other tab, until the tab closes or navigates.
+      */
+    def setBadge(text: String, tab: TabId): IO[Unit]
+
     /** Colours the badge in `colour`, as a CSS colour such as `#4688F1`. */
     def setBadgeColour(colour: String): IO[Unit]
+
+    /** Colours the badge in `colour` while `tab` is active. */
+    def setBadgeColour(colour: String, tab: TabId): IO[Unit]
+
+  /**
+    * The optional permissions, declared in
+    * [[BrowserExtension.optionalPermissions]] and
+    * [[BrowserExtension.optionalHosts]], that the user may grant the extension
+    * while it runs, and take back.
+    */
+  trait Grants:
+
+    /**
+      * Asks the user for the permissions `Q`, and gives evidence of them if the
+      * user grants them, as the APIs that they cover require. The browser asks
+      * only in response to the user's input, so this must run from the handler
+      * of it, through [[ContentBrowser.run]].
+      */
+    def request[Q : Permissions]: IO[Option[Granted[Q]]]
+
+    /** Evidence of the permissions `Q`, if the extension has them. */
+    def granted[Q : Permissions]: IO[Option[Granted[Q]]]
+
+    /** Gives up the permissions `Q`, if they are optional. */
+    def revoke[Q : Permissions]: IO[Unit]
+
+    /**
+      * Asks the user for access to the pages that `patterns` match, and gives
+      * whether the user granted it, as [[request]] does.
+      */
+    def requestHosts(patterns: String*): IO[Boolean]
+
+    /** Whether the extension may access the pages that `patterns` match. */
+    def hasHosts(patterns: String*): IO[Boolean]
 
 /** The ID of a [[Tab]], unique within the browser's session. */
 opaque type TabId = Int
