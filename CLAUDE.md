@@ -13,6 +13,18 @@ Keep it concise and actionable.
 
 This is a Scala library for writing browser extensions against a typed model of the browser.
 
+- `core` (Scala.js): the model (`BrowserExtension`, contexts, `Browser`, `Endpoint`, `StorageKey`, `Codec`, type-level `Permission`s), its implementation over the WebExtensions API (`webext`), and the bundle's entry point (`launch`).
+- `sbt-omnibrowser` (JVM, sbt 2 plugin): links one classic-script bundle shared by every context, then runs it under Node to have it write its own `manifest.json`, bootstraps and HTML for each target (`launch.Describe`).
+  Each context loads a small bootstrap, naming its role, before the bundle.
+- `example`: an extension built with both, whose `testFull` runs `omnibrowserBuild` first. The output is under `target/out/sjs1/scala-3.9.0/omnibrowser-example/omnibrowser/`.
+
+### Gotchas
+
+- The plugin's sources are also compiled into the build definition (`project/plugins-omnibrowser.sbt`), so the build can use its own plugin. A broken plugin breaks loading the build, and the plugin must compile with sbt's own Scala version (3.8.4).
+- In sbt 2, a task returning `File` must have its key marked `@transient`, or be wrapped in `Def.uncached`.
+- A `/*` in a comment, as in a match pattern like `https://*/*`, opens a nested comment in Scala.
+- On this Windows machine, `sbt` cannot start its server (the space in the Java path). Run it in-process instead: `java -jar "C:/Program Files (x86)/sbt/bin/sbt-launch.jar" <commands>`.
+
 ## Instructions
 
 ### Compilation and Diagnostics
