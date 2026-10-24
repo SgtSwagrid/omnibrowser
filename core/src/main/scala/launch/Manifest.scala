@@ -1,0 +1,128 @@
+package com.alecdorrington.omnibrowser.launch
+
+import com.alecdorrington.omnibrowser.{BrowserExtension, ContentScript, Target}
+import scala.scalajs.js
+
+/** The `manifest.json` of an extension, as each browser expects it. */
+private[omnibrowser] object Manifest:
+
+  def apply
+    (
+      extension: BrowserExtension[?],
+      build: Build,
+    )
+    : js.Object = entries(
+    entry("manifest_version", 3),
+    entry("name", extension.name),
+    entry(
+      "version",
+      numericVersion(build.version),
+    ),
+    entryIf(hasVersionName(build))("version_name", build.version),
+    entryIf(extension.description.nonEmpty)(
+      "description",
+      extension.description,
+    ),
+    entryIf(extension.icons.nonEmpty)("icons", icons(extension)),
+    entryIf(extension.permissions.nonEmpty)(
+      "permissions",
+      strings(extension.permissions.toSeq.sorted),
+    ),
+    entry("action", action(extension)),
+    entryIf(extension.options.isDefined)("options_ui", optionsUi),
+    entryIf(extension.background.handlers.nonEmpty)(
+      "background",
+      background(build.target),
+    ),
+    entryIf(extension.contentScripts.nonEmpty)(
+      "content_scripts",
+      contentScripts(extension),
+    ),
+    entryIf(build.target == Target.Firefox)(
+      "browser_specific_settings",
+      gecko(build.geckoId),
+    ),
+  )
+
+  /**
+    * The longest prefix of `version` that browsers accept as a version, being
+    * up to four numbers, such as `1.2.3` of `1.2.3+4-abcdef12-SNAPSHOT`.
+    */
+  def numericVersion(version: String): String = """^\d+(\.\d+){0,3}"""
+    .r
+    .findFirstIn(version)
+    .getOrElse("0")
+
+  /**
+    * Whether to show the full version beside the numeric one, as only Chrome
+    * can.
+    */
+  private def hasVersionName(build: Build): Boolean = build.target ==
+    Target.Chrome && numericVersion(build.version) != build.version
+
+  private def action(extension: BrowserExtension[?]): js.Object = entries(
+    entryIf(extension.popup.isDefined)(
+      "default_popup",
+      Layout.page(PageKind.Popup),
+    ),
+    entryIf(extension.icons.nonEmpty)("default_icon", icons(extension)),
+  )
+
+  private def optionsUi: js.Object = entries(
+    entry("page", Layout.page(PageKind.Options)),
+    entry("open_in_tab", false),
+  )
+
+  /**
+    * Where the background is. Chrome runs it as a service worker of a single
+    * script, whereas Firefox runs it as a page of several scripts.
+    */
+  private def background(target: Target): js.Object = target match
+    case Target.Chrome  => entries(entry("service_worker", Layout.background))
+    case Target.Firefox => entries(entry(
+        "scripts",
+        strings(Seq(Layout.background, Layout.bundle)),
+      ))
+
+  private def contentScripts
+    (extension: BrowserExtension[?])
+    : js.Array[js.Object] =
+    js.Array(extension.contentScripts.zipWithIndex.map(contentScript)*)
+
+  private def contentScript(script: ContentScript, index: Int): js.Object =
+    entries(
+      entry("matches", strings(script.matches)),
+      entry(
+        "js",
+        strings(Seq(
+          Layout.contentScript(index),
+          Layout.bundle,
+        )),
+      ),
+      entry("run_at", script.runAt.id),
+    )
+
+  private def icons(extension: BrowserExtension[?]): js.Object = entries(
+    extension
+      .icons
+      .toSeq
+      .sorted
+      .map((size, path) => entry(size.toString, path))*,
+  )
+
+  private def gecko(id: String): js.Object =
+    entries(entry("gecko", entries(entry("id", id))))
+
+  private def entries(fields: Option[(String, js.Any)]*): js.Object = js
+    .Dictionary(fields.flatten*)
+    .asInstanceOf[js.Object]
+
+  private def entry(key: String, value: js.Any): Option[(String, js.Any)] =
+    Some(key -> value)
+
+  private def entryIf
+    (condition: Boolean)
+    (key: String, value: => js.Any)
+    : Option[(String, js.Any)] = Option.when(condition)(key -> value)
+
+  private def strings(values: Seq[String]): js.Array[String] = js.Array(values*)

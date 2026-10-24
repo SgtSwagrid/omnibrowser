@@ -1,0 +1,108 @@
+package com.alecdorrington.omnibrowser.webext
+
+import scala.scalajs.js
+
+/**
+  * The WebExtensions API, as Firefox, Safari and the Chromium browsers share
+  * it, in so far as the library uses it.
+  */
+@js.native
+private[omnibrowser] trait WebExtensionApi extends js.Object:
+
+  val runtime: RuntimeApi = js.native
+  val storage: StorageApi = js.native
+  val tabs: TabsApi       = js.native
+  val action: ActionApi   = js.native
+
+private[omnibrowser] object WebExtensionApi:
+
+  /**
+    * The API, named `browser` in Firefox and Safari, and `chrome` in Chromium
+    * browsers.
+    */
+  lazy val current: WebExtensionApi =
+    if js.typeOf(js.Dynamic.global.browser) == "undefined" then
+      js.Dynamic.global.chrome.asInstanceOf[WebExtensionApi]
+    else js.Dynamic.global.browser.asInstanceOf[WebExtensionApi]
+
+/** An event, to which listeners of type `L` may be added. */
+@js.native
+private[omnibrowser] trait Event[L <: js.Function] extends js.Object:
+
+  def addListener(listener: L): Unit    = js.native
+  def removeListener(listener: L): Unit = js.native
+
+/**
+  * A listener for messages, which returns `true` if it will respond, through
+  * the function it is given, once it has finished.
+  */
+private[omnibrowser] type MessageListener = js.Function3[
+  js.Any,
+  js.Any,
+  js.Function1[js.Any, Unit],
+  js.Any,
+]
+
+@js.native
+private[omnibrowser] trait RuntimeApi extends js.Object:
+
+  val id: String                                               = js.native
+  def getURL(path: String): String                             = js.native
+  def sendMessage(message: js.Any): js.Promise[js.Any]         = js.native
+  val onMessage: Event[MessageListener]                        = js.native
+  val onInstalled: Event[js.Function1[InstalledDetails, Unit]] = js.native
+  val onStartup: Event[js.Function0[Unit]]                     = js.native
+
+@js.native
+private[omnibrowser] trait InstalledDetails extends js.Object:
+  val reason: String = js.native
+
+@js.native
+private[omnibrowser] trait StorageApi extends js.Object:
+
+  val local: StorageAreaApi   = js.native
+  val sync: StorageAreaApi    = js.native
+  val session: StorageAreaApi = js.native
+
+  val onChanged: Event[StorageListener] = js.native
+
+/** A listener for changes to storage, given them by key, and their area. */
+private[omnibrowser] type StorageListener = js.Function2[
+  js.Dictionary[StorageChange],
+  String,
+  Unit,
+]
+
+@js.native
+private[omnibrowser] trait StorageAreaApi extends js.Object:
+
+  def get(keys: js.Array[String]): js.Promise[js.Dictionary[js.Any]] = js.native
+
+  def set(items: js.Dictionary[js.Any]): js.Promise[Unit] = js.native
+  def remove(keys: js.Array[String]): js.Promise[Unit]    = js.native
+
+@js.native
+private[omnibrowser] trait StorageChange extends js.Object:
+  val newValue: js.UndefOr[js.Any] = js.native
+
+@js.native
+private[omnibrowser] trait TabsApi extends js.Object:
+
+  def query(info: js.Object): js.Promise[js.Array[TabApi]] = js.native
+  def create(properties: js.Object): js.Promise[TabApi]    = js.native
+
+@js.native
+private[omnibrowser] trait TabApi extends js.Object:
+
+  val id: js.UndefOr[Int]       = js.native
+  val windowId: Int             = js.native
+  val active: Boolean           = js.native
+  val url: js.UndefOr[String]   = js.native
+  val title: js.UndefOr[String] = js.native
+
+@js.native
+private[omnibrowser] trait ActionApi extends js.Object:
+
+  def setBadgeText(details: js.Object): js.Promise[Unit]            = js.native
+  def setBadgeBackgroundColor(details: js.Object): js.Promise[Unit] = js.native
+  val onClicked: Event[js.Function1[TabApi, Unit]]                  = js.native
