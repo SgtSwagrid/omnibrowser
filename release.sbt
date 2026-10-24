@@ -1,7 +1,8 @@
-ThisBuild / description := "A reusable template for Scala libraries."
+ThisBuild / description :=
+  "Write a browser extension once against an abstract browser model and run it on both Chrome and Firefox."
 
 ThisBuild / homepage :=
-  Some(url("https://alecdorrington.com/scala-library-template"))
+  Some(url("https://alecdorrington.com/omnibrowser"))
 
 ThisBuild / organization         := "com.alecdorrington"
 ThisBuild / organizationName     := "SgtSwagrid"
