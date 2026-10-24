@@ -12,16 +12,16 @@ scalacOptions ++= Seq(
   "-explain-cyclic",
 )
 
-lazy val `scala-library-template` = project
+lazy val `omnibrowser` = project
   .in(file("."))
   .enablePlugins(ScalaUnidocPlugin)
   .settings(
-    packagePrefix                          := "com.alecdorrington",
+    packagePrefix                          := "com.alecdorrington.omnibrowser",
     libraryDependencies += "org.scalameta" %% "munit" % "1.3.6" % Test,
 
     // Workaround for an sbt 2.0.x classloader bug where in-process test runs
     // can't see Test-scoped dependencies (NoClassDefFoundError: munit/FunSuite).
     Test / fork := true,
     ScalaUnidoc / unidoc / scalacOptions ++=
-      Seq("-project", "Scala Library Template"),
+      Seq("-project", "Omnibrowser"),
   )
