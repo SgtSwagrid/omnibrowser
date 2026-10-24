@@ -21,9 +21,12 @@ object WordCount extends BrowserExtension[Storage]:
   /** How many words have been counted in all. */
   val total = StorageKey.local[Int]("total", 0)
 
+  /** A word, of letters and numbers in any script, as in `héllo` or `привет`. */
+  private val word = """[\p{L}\p{N}']+""".r
+
   override val background = Background(
     serve(count): (text, browser) =>
-      val words = text.split("\\s+").count(_.nonEmpty)
+      val words = word.findAllIn(text).size
       browser
         .storage
         .update(total)(_ + words)
