@@ -53,17 +53,25 @@ object InstallReason:
 
 /**
   * A script that the browser injects into each page that one of `matches`
-  * matches, at `runAt`, with access to only some of the browser's APIs.
+  * matches, at `runAt`, with access to only some of the browser's APIs, along
+  * with the stylesheets `css`, as paths among the extension's assets.
   */
 final case class ContentScript
   (
     matches: Seq[String],
     runAt: RunAt,
     run: ContentBrowser => IO[Unit],
+    css: Seq[String] = Seq.empty,
   ):
 
   /** This script, injected at `runAt` instead. */
   def at(runAt: RunAt): ContentScript = copy(runAt = runAt)
+
+  /**
+    * This script, with the stylesheets at `paths` among the extension's assets
+    * injected into its pages too, before the page's DOM is built.
+    */
+  def withCss(paths: String*): ContentScript = copy(css = css ++ paths)
 
 object ContentScript:
 
@@ -87,5 +95,21 @@ enum RunAt(private[omnibrowser] val id: String):
   /** Once the page has loaded, or soon after. */
   case Idle extends RunAt("document_idle")
 
-/** A page of the extension, which `run` fills in once it has loaded. */
-final case class Page(run: Browser => IO[Unit])
+/**
+  * A page of the extension, whose body begins as the HTML `body`, styled by
+  * `stylesheets`, as paths among the extension's assets, and which `run` fills
+  * in once it has loaded.
+  */
+final case class Page
+  (
+    run: Browser => IO[Unit],
+    body: String = "",
+    stylesheets: Seq[String] = Seq.empty,
+  ):
+
+  /** This page, whose body begins as the HTML `html`. */
+  def withBody(html: String): Page = copy(body = html)
+
+  /** This page, styled by the stylesheets at `paths` too. */
+  def withStylesheets(paths: String*): Page =
+    copy(stylesheets = stylesheets ++ paths)

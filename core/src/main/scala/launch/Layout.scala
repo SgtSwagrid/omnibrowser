@@ -1,5 +1,6 @@
 package com.alecdorrington.omnibrowser.launch
 
+import com.alecdorrington.omnibrowser.Page
 import scala.scalajs.js
 
 /** Where each file of a built extension is, relative to its root. */
@@ -24,19 +25,25 @@ private[omnibrowser] object Layout:
 /** The HTML of an extension's pages, which load the bundle. */
 private[omnibrowser] object Html:
 
-  /** A page of `kind`, titled `title`. */
-  def page(title: String, kind: PageKind): String = s"""<!doctype html>
+  /** The page `page`, of `kind`, titled `title`. */
+  def page(title: String, kind: PageKind, page: Page): String =
+    s"""<!doctype html>
        |<html>
        |  <head>
        |    <meta charset="utf-8">
        |    <title>${ escape(title) }</title>
-       |  </head>
+       |${ page.stylesheets.map(stylesheet).mkString }  </head>
        |  <body>
+       |${ page.body }
        |    <script src="${ Layout.pageScript(kind) }"></script>
        |    <script src="${ Layout.bundle }"></script>
        |  </body>
        |</html>
        |""".stripMargin
+
+  private def stylesheet(path: String): String =
+    s"""    <link rel="stylesheet" href="${ escape(path) }">
+"""
 
   private def escape(text: String): String = text.flatMap:
     case '&'   => "&amp;"

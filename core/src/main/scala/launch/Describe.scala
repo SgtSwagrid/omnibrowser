@@ -85,10 +85,11 @@ private[omnibrowser] object Describe:
     )
     : Map[String, String] = PageKind
     .values
-    .filter(_.of(extension).isDefined)
-    .flatMap(kind =>
+    .toSeq
+    .flatMap(kind => kind.of(extension).map(kind -> _))
+    .flatMap((kind, page) =>
       Seq(
-        Layout.page(kind)       -> Html.page(extension.name, kind),
+        Layout.page(kind)       -> Html.page(extension.name, kind, page),
         Layout.pageScript(kind) ->
           Bootstrap.script(Bootstrap(name, Role.Page(kind))),
       ),

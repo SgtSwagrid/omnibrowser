@@ -107,8 +107,10 @@ private[plugin] object Runner:
       |}
       |
       |const manifest = JSON.parse(fs.readFileSync(path.join(directory, "manifest.json"), "utf8"));
-      |const missing = named(manifest).filter((name) => !fs.existsSync(path.join(directory, name)));
-      |if (missing.length > 0) fail(`The manifest names files that do not exist: ${missing.join(", ")}.`);
+      |const pages = Object.keys(files).filter((name) => name.endsWith(".html"));
+      |const missing = [...named(manifest), ...pages.flatMap((page) => linked(files[page]))]
+      |  .filter((name) => !fs.existsSync(path.join(directory, name)));
+      |if (missing.length > 0) fail(`The extension names files that do not exist: ${missing.join(", ")}.`);
       |
       |/** Every file that the manifest names. */
       |function named(manifest) {
@@ -120,8 +122,15 @@ private[plugin] object Runner:
       |    manifest.options_ui?.page,
       |    background.service_worker,
       |    ...(background.scripts ?? []),
-      |    ...(manifest.content_scripts ?? []).flatMap((script) => script.js ?? []),
+      |    ...(manifest.content_scripts ?? []).flatMap((script) => [...(script.js ?? []), ...(script.css ?? [])]),
       |  ].filter((name) => name !== undefined);
+      |}
+      |
+      |/** The files of the extension that a page loads, such as its stylesheets. */
+      |function linked(html) {
+      |  return [...html.matchAll(/(?:src|href)="([^"]+)"/g)]
+      |    .map((found) => found[1])
+      |    .filter((name) => !/^([a-z][a-z0-9+.-]*:|\/\/|#)/i.test(name));
       |}
       |
       |function fail(message) {
