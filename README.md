@@ -57,6 +57,33 @@ object WordCount extends BrowserExtension[Permission.Storage]:
 `sbt omnibrowserBuild` lays it out for Chrome and Firefox, ready to load unpacked, and `sbt omnibrowserPackage` zips a release for each browser's store.
 See [the example](example/src/main/scala/WordCount.scala) for the whole of this extension.
 
+## 🧪 Testing
+
+Add the testkit to your extension's tests:
+
+```scala
+libraryDependencies += "com.alecdorrington" %% "omnibrowser-testkit" % "0.1.0" % Test
+```
+
+`FakeBrowser` is a browser that keeps everything in memory.
+A test installs the extension into it, acts as the user would, and checks what the extension did:
+
+```scala
+test("A page's words are added to the total."):
+  for
+    browser <- FakeBrowser.install(WordCount)
+    _       <- browser.visit("https://example.com/", "The quick brown fox")
+    total   <- browser.stored(WordCount.total)
+    badge   <- browser.badge
+  yield
+    assertEquals(total, 4)
+    assertEquals(badge, "4")
+```
+
+Each action (`visit`, `openPopup`, `clickAction`, `call`, `store`, ...) waits until the extension has finished responding to it, and fails if the extension failed.
+`FakeBrowser.install` runs the extension's code within the test, where a page's document is a stand-in with only a body of text.
+`FakeBrowser.installBuilt(Target.Chrome)` instead runs the extension as the plugin built it for that browser, with each part in a sandbox of its own; the plugin builds it before the tests run.
+
 ## 👁️ See also
 
 - This library was made using [Scala Library Template](https://github.com/SgtSwagrid/scala-library-template).

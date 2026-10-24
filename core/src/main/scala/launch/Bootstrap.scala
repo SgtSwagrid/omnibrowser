@@ -65,13 +65,14 @@ private[omnibrowser] object Bootstrap:
     lazy val api     = WebExtensionApi.current
     lazy val browser = WebExtensionBrowser(api)
     bootstrap.role match
-      case Role.Background => Launcher.background(extension, browser, api)
+      case Role.Background =>
+        Launcher.default.background(extension, browser, api)
       case Role.ContentScript(index) => extension
           .contentScripts
           .lift(index)
-          .foreach(Launcher.contentScript(_, browser))
+          .foreach(Launcher.default.contentScript(_, browser))
       case Role.Page(kind) =>
-        kind.of(extension).foreach(Launcher.page(_, browser))
+        kind.of(extension).foreach(Launcher.default.page(_, browser))
       case Role.Describe(build) => Describe.publish(extension, bootstrap, build)
 
   private def load(name: String): BrowserExtension[?] = Reflect

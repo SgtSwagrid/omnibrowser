@@ -9,8 +9,11 @@ import com.alecdorrington.omnibrowser.webext.{
 }
 import scala.scalajs.js
 
-/** Starts each part of an extension in the browser. */
-private[omnibrowser] object Launcher:
+/**
+  * Starts each part of an extension in the browser, starting each program that
+  * a part runs with `launch`, which does not wait for it to finish.
+  */
+private[omnibrowser] final class Launcher(launch: IO[Unit] => Unit):
 
   /**
     * Registers the handlers of the extension's background. The browser gives an
@@ -97,5 +100,7 @@ private[omnibrowser] object Launcher:
     .map(response => Messages.success(serve.endpoint.response.encode(response)))
     .handleError(error => Messages.failure(error.getMessage))
 
-  /** Runs `program` without waiting, reporting any failure to the console. */
-  private def launch(program: IO[Unit]): Unit = program.unsafeRunAndForget()
+private[omnibrowser] object Launcher:
+
+  /** Starts each program without waiting, reporting any failure to the console. */
+  val default: Launcher = Launcher(_.unsafeRunAndForget())

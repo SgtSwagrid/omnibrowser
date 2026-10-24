@@ -11,6 +11,8 @@ object Dependencies:
     val scalajsDom = "2.8.1"
     val munit      = "1.3.6"
 
+    val munitCatsEffect = "2.2.1"
+
     /**
       * Also given in `plugins-omnibrowser.sbt`, which cannot see this file, as
       * it configures the build definition that this file belongs to.
@@ -27,6 +29,9 @@ object Dependencies:
 
   lazy val munit =
     libraryDependencies += "org.scalameta" %% "munit" % V.munit % Test
+
+  lazy val munitCatsEffect = libraryDependencies +=
+    "org.typelevel" %% "munit-cats-effect" % V.munitCatsEffect % Test
 
   lazy val scalajsPlugin =
     addSbtPlugin("org.scala-js" % "sbt-scalajs" % V.scalajs)

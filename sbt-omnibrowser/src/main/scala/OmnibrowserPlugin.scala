@@ -1,5 +1,6 @@
 package com.alecdorrington.omnibrowser.plugin
 
+import org.scalajs.jsenv.nodejs.NodeJSEnv
 import org.scalajs.linker.interface.{OutputPatterns, Report}
 import org.scalajs.sbtplugin.ScalaJSPlugin
 import org.scalajs.sbtplugin.ScalaJSPlugin.autoImport.*
@@ -61,6 +62,12 @@ object OmnibrowserPlugin extends AutoPlugin:
   /** The entry point of every extension's bundle. */
   private val entry = "com.alecdorrington.omnibrowser.launch.Entry"
 
+  /**
+    * The environment variable through which the tests learn where the extension
+    * is built for development, as `FakeBrowser.installBuilt` reads.
+    */
+  private val buildVariable = "OMNIBROWSER_BUILD"
+
   override lazy val projectSettings: Seq[Setting[?]] = Seq(
     omnibrowserExtension := None,
     omnibrowserTargets   := Target.values.toSeq,
@@ -72,7 +79,21 @@ object OmnibrowserPlugin extends AutoPlugin:
       (_.withOutputPatterns(OutputPatterns.fromJSFile(Assembly.bundle))),
     omnibrowserBuild   := assemble(fastLinkJS, "development").value,
     omnibrowserPackage := zip(assemble(fullLinkJS, "release")).value,
+
+    // The tests may check the extension as it is built, so every way of
+    // running them builds it first.
+    Test / jsEnvInput :=
+      Def.uncached((Test / jsEnvInput).dependsOn(omnibrowserBuild).value),
+    Test / jsEnv := Def.uncached(NodeJSEnv(
+      NodeJSEnv
+        .Config()
+        .withEnv(Map(buildVariable -> layouts("development").value.toString)),
+    )),
   )
+
+  /** Where the extension is laid out for `mode`, with a directory per target. */
+  private def layouts(mode: String): Def.Initialize[File] =
+    Def.setting(target.value / "omnibrowser" / mode)
 
   /** Lays out the extension for each target, from the bundle that `link` links. */
   private def assemble
@@ -84,7 +105,7 @@ object OmnibrowserPlugin extends AutoPlugin:
     (Compile / link).value
     val linked    = (Compile / link / scalaJSLinkerOutputDirectory).value
     val extension = extensionName.value
-    val directory = target.value / "omnibrowser" / mode
+    val directory = layouts(mode).value
     val runner    = Runner.write(streams.value.cacheDirectory)
     val assets    = omnibrowserAssets.value
     val build     = version.value
