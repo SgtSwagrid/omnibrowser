@@ -30,6 +30,7 @@ This is a Scala library for writing browser extensions against a typed model of 
 - A `/*` in a comment, as in a match pattern like `https://*/*`, opens a nested comment in Scala.
 - On this Windows machine, `sbt` cannot start its server (the space in the Java path). Run it in-process instead: `java -jar "C:/Program Files (x86)/sbt/bin/sbt-launch.jar" <commands>`.
   The machine is often short of memory: an `OutOfMemoryError`, a `hs_err_pid*.log`, or Node exiting with `-1073740791` means retrying later or with a smaller `-Xmx`, not a bug. Delete any `hs_err_pid*.log` and `replay_pid*.log` left behind.
+- `unidoc` cannot resolve `js.JSON.stringify` (an overloaded Scala.js method with defaults), though each project's own Scaladoc can, so the release's docs fail on it. Use `launch.Json.stringify` instead.
 - In a non-native JS class (`extends js.Object`), a Scala-side check like `x.isInstanceOf[FakeDocument]` on a `js.Dynamic` warns that it is always false; widen `x` to `Any` first.
 
 ## Instructions
