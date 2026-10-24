@@ -1,7 +1,7 @@
 <div align="center">
 
   <h1>🧩 Omnibrowser</h1>
-  <p>Write a browser extension once against an abstract browser model and run it on both Chrome and Firefox.</p>
+  <p>Write browser extensions in Scala against a typed model of the browser.</p>
   
   <span>
     <a href="https://github.com/SgtSwagrid/omnibrowser/actions/workflows/build-integrity.yml"><img src="https://github.com/SgtSwagrid/omnibrowser/actions/workflows/build-integrity.yml/badge.svg" alt="Build status" /></a>

@@ -1,5 +1,5 @@
 ThisBuild / description :=
-  "Write a browser extension once against an abstract browser model and run it on both Chrome and Firefox."
+  "Write browser extensions in Scala against a typed model of the browser."
 
 ThisBuild / homepage :=
   Some(url("https://alecdorrington.com/omnibrowser"))
