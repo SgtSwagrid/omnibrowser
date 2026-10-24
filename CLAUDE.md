@@ -11,7 +11,7 @@ Keep it concise and actionable.
 
 ## Project overview
 
-This is a Scala library for writing a browser extension once against an abstract browser model and running it on both Chrome and Firefox.
+This is a Scala library for writing browser extensions against a typed model of the browser.
 
 ## Instructions
 
