@@ -1,7 +1,7 @@
 package com.alecdorrington.omnibrowser.testkit
 
 import com.alecdorrington.omnibrowser.Target
-import com.alecdorrington.omnibrowser.launch.PageKind
+import com.alecdorrington.omnibrowser.launch.{Json, PageKind}
 import scala.collection.mutable
 import scala.scalajs.js
 import scala.scalajs.js.JSConverters.*
@@ -272,7 +272,7 @@ private[testkit] final class Simulation(runner: Runner, activity: Activity):
   /** `value` after a round trip through JSON, as the browser serialises it. */
   private def serialised(value: js.Any): js.Any =
     if js.isUndefined(value) then value
-    else js.JSON.parse(js.JSON.stringify(value))
+    else js.JSON.parse(Json.stringify(value))
 
 private[testkit] object Simulation:
 
