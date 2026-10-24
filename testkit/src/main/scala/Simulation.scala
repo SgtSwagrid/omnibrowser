@@ -50,11 +50,20 @@ private[testkit] final class Simulation(runner: Runner, activity: Activity):
   private var tabs     = Vector.empty[FakeTab]
   private var active   = Option.empty[Int]
 
-  /** The text on the extension's badge. */
+  /** The text on the extension's badge, in tabs without their own. */
   var badge = ""
 
   /** The colour of the extension's badge, if it has been given one. */
   var badgeColour = Option.empty[String]
+
+  private val tabBadges  = mutable.Map.empty[Int, String]
+  private val tabColours = mutable.Map.empty[Int, String]
+
+  /** Whether the fake user grants the permissions that the extension asks for. */
+  var grantsRequests = true
+
+  /** The optional permissions and hosts that the fake user has granted. */
+  private val granted = mutable.Set.empty[String]
 
   /** Where the extension's files are, as URLs. */
   def origin: String = runner.target match
@@ -169,13 +178,55 @@ private[testkit] final class Simulation(runner: Runner, activity: Activity):
   /** Opens a tab at `url`, as the extension asked. */
   def create(url: String): js.Object = tabObject(openTab(url, "")._1)
 
-  def setBadge(text: String): Unit =
+  /** Shows `text` on the badge in `tab`, or else in every tab. */
+  def setBadge(text: String, tab: Option[Int]): Unit =
     activity.touch()
-    badge = text
+    tab match
+      case Some(id) => tabBadges(id) = text
+      case None     => badge = text
 
-  def setBadgeColour(colour: String): Unit =
+  /** Colours the badge in `tab`, or else in every tab. */
+  def setBadgeColour(colour: String, tab: Option[Int]): Unit =
     activity.touch()
-    badgeColour = Some(colour)
+    tab match
+      case Some(id) => tabColours(id) = colour
+      case None     => badgeColour = Some(colour)
+
+  /** The text on the badge in `tab`. */
+  def badgeOf(tab: Int): String = tabBadges.getOrElse(tab, badge)
+
+  /** The colour of the badge in `tab`, if it has been given one. */
+  def badgeColourOf(tab: Int): Option[String] = tabColours
+    .get(tab)
+    .orElse(badgeColour)
+
+  /**
+    * Asks the fake user for the permissions and hosts that `asked` names, as
+    * `permissions.request` does, which may ask only for those declared.
+    */
+  def request(asked: js.Dynamic): js.Promise[Boolean] =
+    activity.touch()
+    val wanted     = names(asked)
+    val undeclared = wanted.filterNot(isDeclared)
+    if undeclared.nonEmpty then
+      js.Promise
+        .reject(js.Error(
+          "Only permissions specified in the manifest may be requested: " +
+            undeclared.toSeq.sorted.mkString(", "),
+        ))
+    else
+      if grantsRequests then granted ++= wanted
+      js.Promise.resolve(grantsRequests)
+
+  /** Whether the extension holds every permission and host that `asked` names. */
+  def holds(asked: js.Dynamic): Boolean = names(asked).forall(isHeld)
+
+  /** Gives up the optional permissions and hosts that `asked` names. */
+  def revoke(asked: js.Dynamic): Boolean =
+    activity.touch()
+    val wanted = names(asked)
+    granted --= wanted
+    !wanted.exists(isRequired)
 
   /**
     * A tab as the API describes it, with its URL only if the extension may see
@@ -189,7 +240,7 @@ private[testkit] final class Simulation(runner: Runner, activity: Activity):
         windowId = 1,
         active = isActive(tab),
       )
-    if runner.permissions("tabs") then
+    if isHeld("tabs") then
       js.Object
         .assign(
           fields,
@@ -265,6 +316,21 @@ private[testkit] final class Simulation(runner: Runner, activity: Activity):
     )
     val changes = js.Dictionary[js.Any](key -> change)
     contexts.foreach(_.api.storage.onChanged.fire(changes, area))
+
+  private def names(asked: js.Dynamic): Set[String] =
+    strings(asked.permissions) ++ strings(asked.origins)
+
+  private def strings(json: js.Dynamic): Set[String] =
+    if js.isUndefined(json) then Set.empty
+    else json.asInstanceOf[js.Array[String]].toSet
+
+  private def isRequired(name: String): Boolean = runner.permissions(name) ||
+    runner.hosts.contains(name)
+
+  private def isDeclared(name: String): Boolean = isRequired(name) ||
+    runner.optionalPermissions(name) || runner.optionalHosts.contains(name)
+
+  private def isHeld(name: String): Boolean = isRequired(name) || granted(name)
 
   private def isTrue(reply: js.Any): Boolean = js.typeOf(reply) == "boolean" &&
     reply.asInstanceOf[Boolean]

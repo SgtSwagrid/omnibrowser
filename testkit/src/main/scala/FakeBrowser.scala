@@ -25,6 +25,7 @@ final class FakeBrowser private (
   /** The test's own context, from which it makes requests. */
   private lazy val tester = WebExtensionBrowser(
     simulation.context(Kind.Test).api.asInstanceOf[WebExtensionApi],
+    activity.launch,
   )
 
   /**
@@ -65,11 +66,25 @@ final class FakeBrowser private (
     js.Dictionary(key.name -> key.codec.encode(value)),
   ))
 
-  /** The text on the extension's badge. */
+  /** The text on the extension's badge, in tabs without their own. */
   def badge: IO[String] = IO(simulation.badge)
 
   /** The colour of the extension's badge, if it has been given one. */
   def badgeColour: IO[Option[String]] = IO(simulation.badgeColour)
+
+  /** The text on the extension's badge in `tab`. */
+  def badgeOf(tab: TabId): IO[String] = IO(simulation.badgeOf(tab.toInt))
+
+  /** The colour of the extension's badge in `tab`, if it has one. */
+  def badgeColourOf(tab: TabId): IO[Option[String]] =
+    IO(simulation.badgeColourOf(tab.toInt))
+
+  /**
+    * Answers each later request for permissions with `grant`, as the user
+    * would. The fake user grants them until told otherwise.
+    */
+  def answerRequests(grant: Boolean): IO[Unit] =
+    IO(simulation.grantsRequests = grant)
 
   /** The open tabs, as the extension sees them. */
   def tabs: IO[List[Tab]] = IO(

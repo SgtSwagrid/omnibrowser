@@ -46,6 +46,25 @@ abstract class BrowserExtension[P : Permissions as P]:
   /** The manifest names of the extension's permissions. */
   final def permissions: Set[String] = P.names
 
+  /**
+    * The pages, as match patterns, that the extension may access, such as the
+    * APIs to which its background sends requests.
+    */
+  def hosts: Seq[String] = Seq.empty
+
+  /**
+    * The permissions that the extension may ask the user for while it runs,
+    * through [[Browser.Grants.request]], as in
+    * `Permissions.of[Permission.Tabs]`.
+    */
+  def optionalPermissions: Permissions[?] = Permissions.none
+
+  /**
+    * The pages, as match patterns, that the extension may ask the user to let
+    * it access while it runs, through [[Browser.Grants.requestHosts]].
+    */
+  def optionalHosts: Seq[String] = Seq.empty
+
   /** Grants the code within the extension each of its permissions. */
   given granted[Q >: P]: Granted[Q] = Granted[Q]()
 

@@ -119,6 +119,33 @@ class ManifestSuite extends FunSuite:
     )
     assert(js.isUndefined(permissions.optional))
 
+  test("The manifest requests the hosts and optional permissions."):
+    val manifest = js
+      .JSON
+      .parse(
+        Describe.files(
+          Asker,
+          "Asker",
+          Build(Target.Chrome, "1", "id"),
+        )("manifest.json"),
+      )
+    assertEquals(
+      strings(manifest.permissions),
+      List("storage"),
+    )
+    assertEquals(
+      strings(manifest.host_permissions),
+      List("https://api.example.com/*"),
+    )
+    assertEquals(
+      strings(manifest.optional_permissions),
+      List("activeTab", "tabs"),
+    )
+    assertEquals(
+      strings(manifest.optional_host_permissions),
+      List("https://*/*"),
+    )
+
   test("Firefox is told what data an extension collects."):
     val permissions = js
       .JSON
@@ -219,6 +246,17 @@ object Sample extends BrowserExtension[Storage]:
 /** An extension with no parts at all. */
 object Minimal extends BrowserExtension[Any]:
   override val name = "Minimal"
+
+/** An extension that asks for permissions while it runs. */
+object Asker extends BrowserExtension[Storage]:
+
+  override val name = "Asker"
+
+  override val hosts = Seq("https://api.example.com/*")
+
+  override val optionalPermissions = Permissions.of[Tabs & ActiveTab]
+
+  override val optionalHosts = Seq("https://*/*")
 
 /** An extension that collects data. */
 object Collector extends BrowserExtension[Any]:

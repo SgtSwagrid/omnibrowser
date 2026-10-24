@@ -30,6 +30,18 @@ private[omnibrowser] object Manifest:
       "permissions",
       strings(extension.permissions.toSeq.sorted),
     ),
+    entryIf(extension.hosts.nonEmpty)(
+      "host_permissions",
+      strings(extension.hosts),
+    ),
+    entryIf(extension.optionalPermissions.names.nonEmpty)(
+      "optional_permissions",
+      strings(extension.optionalPermissions.names.toSeq.sorted),
+    ),
+    entryIf(extension.optionalHosts.nonEmpty)(
+      "optional_host_permissions",
+      strings(extension.optionalHosts),
+    ),
     entry("action", action(extension)),
     entryIf(extension.options.isDefined)("options_ui", optionsUi),
     entryIf(extension.background.handlers.nonEmpty)(
