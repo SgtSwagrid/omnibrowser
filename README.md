@@ -52,6 +52,8 @@ object WordCount extends BrowserExtension[Permission.Storage]:
   )
 ```
 
+Messages and stored values hold JSON, through a `Codec`: there are codecs of the usual types, and `derives Codec` makes one of a case class, enum or sealed trait.
+
 Firefox shows the user what personal data an extension collects, and its store requires every new extension to say: override `dataCollection` if yours collects any, as it otherwise declares none.
 
 `sbt omnibrowserBuild` lays it out for Chrome and Firefox, ready to load unpacked, and `sbt omnibrowserPackage` zips a release for each browser's store.
