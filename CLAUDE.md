@@ -13,7 +13,9 @@ Keep it concise and actionable.
 
 This is a Scala library for writing browser extensions against a typed model of the browser.
 
-- `core` (Scala.js): the model (`BrowserExtension`, contexts, `Browser`, `Endpoint`, `StorageKey`, `Codec`, type-level `Permission`s), its implementation over the WebExtensions API (`webext`), and the bundles' entry points (`launch`).
+- `core` (Scala.js): the model (`BrowserExtension`, contexts, `Browser`, `Endpoint`, `Shared`, `StorageKey`, `Codec`, type-level `Permission`s), its implementation over the WebExtensions API (`webext`), and the bundles' entry points (`launch`).
+  - Every part sees a `ContentBrowser`; content scripts see a `TabBrowser` (which serves `Endpoint.tab`s and shares `Shared.tab`s, each as a `Resource`), and the background and pages a `Browser` (whose `tabs` call and read them by tab). One `WebExtensionBrowser` implements both.
+  - A tab request is `tabs.sendMessage` to frame `0`. A shared value is read by a request of its hidden `Endpoint[Unit, A]`, and watched through a port (`tabs.connect`, named after it) on which the owner posts `{value}` for each value of `signal.discrete`. A watcher also asks, as a probe, so that it ends with the default where the tab has listeners but none shares it (an unclaimed port would otherwise stay open and silent).
 - `sbt-omnibrowser` (JVM, sbt 2 plugin): links two classic-script bundles from the same code, then runs the main one under Node to have it write its own `manifest.json`, bootstraps and HTML for each target (`launch.Describe`).
   The main bundle (`omnibrowser.js`, from `launch.Entry`) runs the background and pages; the content scripts' own (`omnibrowser-content.js`, from `launch.ContentEntry`, linked by `linkContent`) holds only what they reach, and is dropped if there are none.
   Each context loads a small bootstrap, naming its role, before its bundle.
@@ -25,6 +27,7 @@ This is a Scala library for writing browser extensions against a typed model of 
 - `laminar` (`omnibrowser-laminar`, Scala.js): `LaminarPage` and `LaminarContentScript`, which render an element into the body, and extension methods on `ContentBrowser` connecting storage keys, `IO`s and fs2 streams to Airstream (`signal`, `writer`, `updater`, `events`, `observer`).
   `updater`'s transform takes the event, as Airstream's `Var.updater` does. Scala cannot infer the event's type from `-->`, so it is `Any` unless the transform annotates it.
   An fs2 stream runs through `browser.run` (so the testkit tracks it) while its event stream is started, and a `Deferred` interrupts it on stop.
+  `signal`'s two overloads (a key's, and a tab's value's) share one generic receiver, `[B <: ContentBrowser]`, the tab's asking for `B <:< Browser`: Scala picks among extension overloads by receiver before the arguments, so a separate `extension (browser: Browser)` hides `signal(key)` from pages, and duplicating it there is ambiguous.
 - `example`: an extension built with both, whose popup is Laminar's, and tested with the testkit in both ways. The output is under `target/out/sjs1/scala-3.9.0/omnibrowser-example/omnibrowser/`.
 - The plugin makes every test run build the extension first (through `Test / jsEnvInput`, as `test` is an input task in sbt 2), and tells the tests where it is through `OMNIBROWSER_BUILD`.
 
@@ -46,6 +49,9 @@ This is a Scala library for writing browser extensions against a typed model of 
 - On this Windows machine, `sbt` cannot start its server (the space in the Java path). Run it in-process instead: `java -jar "C:/Program Files (x86)/sbt/bin/sbt-launch.jar" <commands>`.
   The machine is often short of memory: an `OutOfMemoryError`, a `hs_err_pid*.log`, or Node exiting with `-1073740791` means retrying later or with a smaller `-Xmx`, not a bug. Delete any `hs_err_pid*.log` and `replay_pid*.log` left behind.
 - sbt 2 restores outputs from its cache as symlinks, which Windows cannot move without a privilege, so a later recompile can fail with `FileSystemException: ... A required privilege is not held by the client`. Run `<project>/clean` and retry.
+- fs2's `interruptWhen(stream)` interrupts once the halting stream ends, even without emitting `true`. To interrupt only on some outcome, pass an `IO[Either[Throwable, Unit]]` that never completes otherwise.
+- The testkit delivers port messages, connections and disconnections with `Simulation.later` (a `setTimeout`, counted as pending by `Activity`), as a port's listeners are only added after `connect` returns. Its ports, like the browser's, throw on posting once disconnected.
+- A class nested in a companion and named like a top-level class (`Endpoint.Tab`, `Shared.Tab` and `Tab`) must be made with `new` within it, or the constructor proxy is ambiguous.
 - `unidoc` cannot resolve `js.JSON.stringify` (an overloaded Scala.js method with defaults), though each project's own Scaladoc can, so the release's docs fail on it. Use `launch.Json.stringify` instead.
 - In a non-native JS class (`extends js.Object`), a Scala-side check like `x.isInstanceOf[FakeDocument]` on a `js.Dynamic` warns that it is always false; widen `x` to `Any` first.
 

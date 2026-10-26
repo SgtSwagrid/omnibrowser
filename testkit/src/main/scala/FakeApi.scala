@@ -18,7 +18,8 @@ private[testkit] final class FakeApi
   val storage: FakeStorage = FakeStorage(simulation, context)
 
   val tabs: js.UndefOr[FakeTabs] =
-    if context.kind.isContent then js.undefined else FakeTabs(simulation)
+    if context.kind.isContent then js.undefined
+    else FakeTabs(simulation, context)
 
   val action: js.UndefOr[FakeAction] =
     if context.kind.isContent then js.undefined else FakeAction(simulation)
@@ -35,6 +36,9 @@ private[testkit] final class FakeEvent extends js.Object:
 
   def removeListener(listener: js.Function): Unit =
     listeners.filterInPlace(_ != listener)
+
+  /** Whether nothing listens. */
+  def isQuiet: Boolean = listeners.isEmpty
 
   /** Calls each listener with `arguments`, and gives what each returned. */
   def fire(arguments: js.Any*): Seq[js.Any] = listeners
@@ -56,6 +60,7 @@ private[testkit] final class FakeRuntime
     simulation.deliver(context, message)
 
   val onMessage: FakeEvent   = FakeEvent()
+  val onConnect: FakeEvent   = FakeEvent()
   val onInstalled: FakeEvent = FakeEvent()
   val onStartup: FakeEvent   = FakeEvent()
 
@@ -88,7 +93,12 @@ private[testkit] final class FakeStorageArea
   def remove(keys: js.Array[String]): js.Promise[Unit] =
     simulation.access(context, area)(simulation.delete(area, keys))
 
-private[testkit] final class FakeTabs(simulation: Simulation) extends js.Object:
+private[testkit] final class FakeTabs
+  (
+    simulation: Simulation,
+    context: FakeContext,
+  )
+  extends js.Object:
 
   def query(info: js.Dynamic): js.Promise[js.Array[js.Object]] = js
     .Promise
@@ -97,6 +107,57 @@ private[testkit] final class FakeTabs(simulation: Simulation) extends js.Object:
   def create(properties: js.Dynamic): js.Promise[js.Object] = js
     .Promise
     .resolve(simulation.create(properties.url.asInstanceOf[String]))
+
+  def sendMessage
+    (
+      tabId: Int,
+      message: js.Any,
+      options: js.UndefOr[js.Object],
+    )
+    : js.Promise[js.Any] = simulation.deliver(context, tabId, message)
+
+  def connect(tabId: Int, info: js.Dynamic): FakePort =
+    simulation.connect(tabId, info.name.asInstanceOf[String])
+
+/**
+  * One end of a port between two contexts of a [[FakeBrowser]], which gives the
+  * other end what is posted to it, after serialising it as JSON, once the
+  * poster has carried on, as the browser does. It is mutable, as the ports that
+  * it fakes are.
+  */
+private[testkit] final class FakePort
+  (val name: String, simulation: Simulation)
+  extends js.Object:
+
+  val onMessage: FakeEvent    = FakeEvent()
+  val onDisconnect: FakeEvent = FakeEvent()
+
+  /** The other end, to which this end posts. */
+  private[testkit] final var peer: js.UndefOr[FakePort] = js.undefined
+
+  private var connected = true
+
+  def postMessage(message: js.Any): Unit =
+    if !connected then
+      throw js.JavaScriptException(
+        js.Error("Attempting to use a disconnected port object"),
+      )
+    val json = simulation.serialised(message)
+    peer.foreach(other => simulation.later(other.receive(json)))
+
+  /** Disconnects both ends, of which only the other end hears. */
+  def disconnect(): Unit = if connected then
+    connected = false
+    peer.foreach(other => simulation.later(other.drop()))
+
+  /** Gives this end's listeners `message`, unless it has disconnected. */
+  private[testkit] final def receive(message: js.Any): Unit =
+    if connected then onMessage.fire(message, this)
+
+  /** Disconnects this end, as the other end did, and tells its listeners. */
+  private[testkit] final def drop(): Unit = if connected then
+    connected = false
+    onDisconnect.fire(this)
 
 private[testkit] final class FakeAction
   (simulation: Simulation)

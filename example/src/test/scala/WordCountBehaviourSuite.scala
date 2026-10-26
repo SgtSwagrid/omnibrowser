@@ -44,6 +44,21 @@ class WordCountBehaviourSuite extends CatsEffectSuite:
         assertEquals(badge, "9")
         assertEquals(text, "9 words counted.")
 
+    test(s"The popup shows how many words the active tab's page has, $name."):
+      for
+        browser <- install
+        _       <- browser.visit(
+          "https://example.com/",
+          "One two three",
+        )
+        _      <- browser.visit("http://example.org/", "Not counted")
+        first  <- browser.openPopup.flatMap(_.text(".page"))
+        _      <- browser.visit("https://example.net/", "Four five")
+        second <- browser.openPopup.flatMap(_.text(".page"))
+      yield
+        assertEquals(first, "0 on this page.")
+        assertEquals(second, "2 on this page.")
+
     test(s"The popup's button resets the count, $name."):
       for
         browser <- install

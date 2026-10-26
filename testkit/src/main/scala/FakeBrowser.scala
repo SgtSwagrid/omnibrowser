@@ -55,6 +55,23 @@ final class FakeBrowser private (
   def call[Req, Res](endpoint: Endpoint[Req, Res])(request: Req): IO[Res] =
     tester.runtime.call(endpoint)(request) <* settle
 
+  /**
+    * Makes a request of the content scripts of `tab` that serve `endpoint`, as
+    * the background would.
+    */
+  def call[Req, Res]
+    (
+      endpoint: Endpoint.Tab[Req, Res],
+      tab: TabId,
+    )
+    (request: Req)
+    : IO[Res] = tester.tabs.call(endpoint, tab)(request) <* settle
+
+  /** The value of `shared` in `tab`, as the background would see it. */
+  def shared[A](shared: Shared.Tab[A], tab: TabId): IO[A] = tester
+    .tabs
+    .get(shared, tab) <* settle
+
   /** The stored value of `key`. */
   def stored[A](key: StorageKey[A]): IO[A] = IO(
     simulation.stored(key.area.id, key.name),

@@ -51,8 +51,22 @@ private[omnibrowser] trait RuntimeApi extends js.Object:
   def getURL(path: String): String                             = js.native
   def sendMessage(message: js.Any): js.Promise[js.Any]         = js.native
   val onMessage: Event[MessageListener]                        = js.native
+  val onConnect: Event[js.Function1[PortApi, Unit]]            = js.native
   val onInstalled: Event[js.Function1[InstalledDetails, Unit]] = js.native
   val onStartup: Event[js.Function0[Unit]]                     = js.native
+
+/**
+  * One end of a long-lived channel between two parts of an extension, through
+  * which each may send the other messages until either disconnects it.
+  */
+@js.native
+private[omnibrowser] trait PortApi extends js.Object:
+
+  val name: String                                    = js.native
+  def postMessage(message: js.Any): Unit              = js.native
+  def disconnect(): Unit                              = js.native
+  val onMessage: Event[js.Function1[js.Any, Unit]]    = js.native
+  val onDisconnect: Event[js.Function1[js.Any, Unit]] = js.native
 
 @js.native
 private[omnibrowser] trait InstalledDetails extends js.Object:
@@ -91,6 +105,16 @@ private[omnibrowser] trait TabsApi extends js.Object:
 
   def query(info: js.Object): js.Promise[js.Array[TabApi]] = js.native
   def create(properties: js.Object): js.Promise[TabApi]    = js.native
+
+  def sendMessage
+    (
+      tabId: Int,
+      message: js.Any,
+      options: js.Object,
+    )
+    : js.Promise[js.Any] = js.native
+
+  def connect(tabId: Int, info: js.Object): PortApi = js.native
 
 @js.native
 private[omnibrowser] trait TabApi extends js.Object:

@@ -1,12 +1,15 @@
 package com.alecdorrington.omnibrowser.laminar
 
 import cats.effect.IO
+import cats.syntax.all.*
 import com.alecdorrington.omnibrowser.{
-  Background, Browser, BrowserExtension, Endpoint, StorageKey,
+  Background, Browser, BrowserExtension, ContentScript, Endpoint, Shared,
+  StorageKey,
 }
 import com.alecdorrington.omnibrowser.Permission.Storage
 import com.alecdorrington.omnibrowser.testkit.FakeBrowser
 import com.raquo.laminar.api.L.*
+import fs2.concurrent.SignallingRef
 import munit.CatsEffectSuite
 
 class LaminarSuite extends CatsEffectSuite:
@@ -104,6 +107,29 @@ class LaminarSuite extends CatsEffectSuite:
     yield
       assertEquals(hidden, 1)
       assertEquals(shown, 3)
+
+  test(
+    "A page shows a tab's shared value, then each new value that it is given.",
+  ):
+    for
+      browser <- FakeBrowser.install(Presser)
+      page    <- browser.visit("https://example.com/")
+      _       <- browser.call(Presser.press, page.tab.get)(())
+      popup   <- browser.openPopup
+      before  <- popup.text(".presses")
+      _       <- browser.call(Presser.press, page.tab.get)(())
+      after   <- popup.text(".presses")
+    yield
+      assertEquals(before, "1 presses")
+      assertEquals(after, "2 presses")
+
+  test("A page shows a tab's default value where nothing there shares it."):
+    for
+      browser <- FakeBrowser.install(Presser)
+      _       <- browser.visit("http://example.com/")
+      popup   <- browser.openPopup
+      presses <- popup.text(".presses")
+    yield assertEquals(presses, "0 presses")
 
 /** Counts clicks, with each of the ways in which Laminar uses the browser. */
 object Tally extends BrowserExtension[Storage]:
@@ -206,3 +232,38 @@ object Copier extends BrowserExtension[Storage]:
       browser.storage.changes(original).evalMap(browser.storage.set(copy, _)),
     ) --> (_ => ()),
   )
+
+/**
+  * Counts the presses of each secure page, which its content script shares, and
+  * which the popup shows for the active tab.
+  */
+object Presser extends BrowserExtension[Any]:
+
+  override val name = "Presser"
+
+  /** How many times a page has been pressed. */
+  val presses = Shared.tab[Int]("presses", 0)
+
+  /** Presses a page. */
+  val press = Endpoint.tab[Unit, Unit]("press")
+
+  override def contentScripts() = Seq(ContentScript("https://*/*")(browser =>
+    SignallingRef[IO]
+      .of(0)
+      .flatMap(count =>
+        (browser.serve(press)(_ => count.update(_ + 1)) >>
+          browser.share(presses)(count)).useForever,
+      ),
+  ))
+
+  override def popup() = Some(LaminarPage(browser =>
+    p(
+      cls := "presses",
+      child.text <--
+        browser
+          .events(browser.tabs.active)
+          .collect { case Some(tab) => tab.id }
+          .flatMapSwitch(browser.signal(presses, _))
+          .map(presses => s"$presses presses"),
+    ),
+  ))

@@ -1,7 +1,9 @@
 package com.alecdorrington.omnibrowser.laminar
 
 import cats.effect.{Deferred, IO}
-import com.alecdorrington.omnibrowser.{ContentBrowser, Granted, StorageKey}
+import com.alecdorrington.omnibrowser.{
+  Browser, ContentBrowser, Granted, Shared, StorageKey, TabId,
+}
 import com.alecdorrington.omnibrowser.Permission.Storage
 import com.raquo.laminar.api.L.{EventStream, Observer, Signal}
 import fs2.Stream
@@ -25,13 +27,6 @@ extension (browser: ContentBrowser)
     * stream starts.
     */
   def events[A](program: IO[A]): EventStream[A] = events(Stream.eval(program))
-
-  /**
-    * The value of `key`, which is its default until it has been read, then each
-    * new value that it is given, while anything observes the signal.
-    */
-  def signal[A](key: StorageKey[A])(using Granted[Storage]): Signal[A] =
-    events(browser.storage.values(key)).toSignal(key.default)
 
   /** Gives `key` each value that the observer observes. */
   def writer[A](key: StorageKey[A])(using Granted[Storage]): Observer[A] =
@@ -60,6 +55,31 @@ extension (browser: ContentBrowser)
     */
   def observer[A](program: A => IO[Unit]): Observer[A] =
     Observer(value => browser.run(program(value)))
+
+// Scala chooses among overloads by their receivers before their arguments, so
+// both of `signal`'s overloads have one receiver, the tab's asking for a page.
+extension [B <: ContentBrowser](browser: B)
+
+  /**
+    * The value of `key`, which is its default until it has been read, then each
+    * new value that it is given, while anything observes the signal.
+    */
+  def signal[A](key: StorageKey[A])(using Granted[Storage]): Signal[A] = browser
+    .events(browser.storage.values(key))
+    .toSignal(key.default)
+
+  /**
+    * The value of `shared` in `tab`, as the background or a page sees it, which
+    * is its default until a content script there shares it, then each new value
+    * that it is given, while anything observes the signal, and its default
+    * again once nothing there shares it.
+    */
+  def signal[A]
+    (shared: Shared.Tab[A], tab: TabId)
+    (using page: B <:< Browser)
+    : Signal[A] = browser
+    .events(page(browser).tabs.values(shared, tab))
+    .toSignal(shared.default)
 
 /**
   * The source of an event stream of the values of `values`, which `browser`

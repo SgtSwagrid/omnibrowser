@@ -66,7 +66,7 @@ final case class ContentScript
   (
     matches: Seq[String],
     runAt: RunAt,
-    run: ContentBrowser => IO[Unit],
+    run: TabBrowser => IO[Unit],
     css: Seq[String] = Seq.empty,
   ):
 
@@ -86,7 +86,7 @@ object ContentScript:
     * page has loaded. Each is a
     * [[https://developer.mozilla.org/docs/Mozilla/Add-ons/WebExtensions/Match_patterns match pattern]].
     */
-  def apply(matches: String*)(run: ContentBrowser => IO[Unit]): ContentScript =
+  def apply(matches: String*)(run: TabBrowser => IO[Unit]): ContentScript =
     ContentScript(matches, RunAt.Idle, run)
 
 /** When the browser injects a [[ContentScript]] into its page. */

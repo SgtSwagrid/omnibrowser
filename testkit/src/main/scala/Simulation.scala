@@ -130,9 +130,63 @@ private[testkit] final class Simulation(runner: Runner, activity: Activity):
     * after serialising it as JSON, as Chrome does.
     */
   def deliver(sender: FakeContext, message: js.Any): js.Promise[js.Any] =
+    send(sender, receivers(sender), message)
+
+  /**
+    * Delivers `message` from `sender` to the content scripts of `tab`, after
+    * serialising it as JSON, as Chrome does.
+    */
+  def deliver
+    (
+      sender: FakeContext,
+      tab: Int,
+      message: js.Any,
+    )
+    : js.Promise[js.Any] = send(sender, inTab(tab), message)
+
+  /**
+    * Connects a port named `name` to the content scripts of `tab`, and gives
+    * its near end. The far end is given to their listeners once the caller has
+    * carried on, and if none listens, the near end is disconnected, as the
+    * browser does.
+    */
+  def connect(tab: Int, name: String): FakePort =
+    val (near, far) = (FakePort(name, this), FakePort(name, this))
+    near.peer = far
+    far.peer = near
+    later:
+      val listeners = inTab(tab)
+        .map(_.api.runtime.onConnect)
+        .filterNot(_.isQuiet)
+      if listeners.isEmpty then near.drop() else listeners.foreach(_.fire(far))
+    near
+
+  /**
+    * Does `action` once whatever caused it has carried on, as the browser
+    * delivers events, and counts the extension busy until then.
+    */
+  def later(action: => Unit): Unit =
+    activity.await()
+    js.timers
+      .setTimeout(0)(
+        try action
+        finally activity.answer(),
+      )
+
+  /** `value` after a round trip through JSON, as the browser serialises it. */
+  def serialised(value: js.Any): js.Any =
+    if js.isUndefined(value) then value
+    else js.JSON.parse(Json.stringify(value))
+
+  private def send
+    (
+      sender: FakeContext,
+      listeners: Seq[FakeContext],
+      message: js.Any,
+    )
+    : js.Promise[js.Any] =
     activity.touch()
     new js.Promise[js.Any]((resolve, reject) =>
-      val listeners = receivers(sender)
       if listeners.isEmpty then
         reject(js.Error(
           "Could not establish connection. Receiving end does not exist.",
@@ -283,6 +337,11 @@ private[testkit] final class Simulation(runner: Runner, activity: Activity):
   private def receivers(sender: FakeContext): Seq[FakeContext] = extension
     .filter(_ != sender)
 
+  /** The contexts of the content scripts of `tab`. */
+  private def inTab(tab: Int): Seq[FakeContext] = contexts
+    .filter(_.kind == Kind.Content(tab))
+    .toSeq
+
   /**
     * Gives each of `contexts` `message`, and `resolve` the first response, or
     * nothing if none of them will respond.
@@ -355,11 +414,6 @@ private[testkit] final class Simulation(runner: Runner, activity: Activity):
 
   private def isTrue(reply: js.Any): Boolean = js.typeOf(reply) == "boolean" &&
     reply.asInstanceOf[Boolean]
-
-  /** `value` after a round trip through JSON, as the browser serialises it. */
-  private def serialised(value: js.Any): js.Any =
-    if js.isUndefined(value) then value
-    else js.JSON.parse(Json.stringify(value))
 
 private[testkit] object Simulation:
 

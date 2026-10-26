@@ -1,9 +1,13 @@
 package com.alecdorrington.omnibrowser
 
-import cats.effect.IO
+import cats.effect.{IO, Resource}
 import fs2.Stream
+import fs2.concurrent.Signal
 
-/** The browser, as a content script sees it: with only some of its APIs. */
+/**
+  * The browser, as every part of the extension sees it, its content scripts
+  * included: with only some of its APIs.
+  */
 trait ContentBrowser:
 
   /** The extension itself, and the messages between its parts. */
@@ -19,6 +23,26 @@ trait ContentBrowser:
     * still sees it. Any failure is reported to the console.
     */
   def run(program: IO[Unit]): Unit
+
+/**
+  * The browser, as a content script sees it: with only some of its APIs, and
+  * with what the script offers the rest of the extension from its tab.
+  */
+trait TabBrowser extends ContentBrowser:
+
+  /**
+    * Answers the requests that the background and pages make of `endpoint` in
+    * this script's tab, while the resource is in use.
+    */
+  def serve[Req, Res](endpoint: Endpoint.Tab[Req, Res])(run: Req => IO[Res])
+    : Resource[IO, Unit]
+
+  /**
+    * Shares `signal` as the value of `shared` in this script's tab, while the
+    * resource is in use, so that the background and pages see its value, then
+    * each new value. Once it is released, the value there is the default again.
+    */
+  def share[A](shared: Shared.Tab[A])(signal: Signal[IO, A]): Resource[IO, Unit]
 
 /** The browser, as the extension's background and pages see it. */
 trait Browser extends ContentBrowser:
@@ -84,6 +108,32 @@ object Browser:
 
     /** Opens a new tab at `url`. */
     def open(url: String): IO[Tab]
+
+    /**
+      * Makes a request of the content scripts of `tab` that serve `endpoint`,
+      * which fails if none of them does.
+      */
+    def call[Req, Res]
+      (
+        endpoint: Endpoint.Tab[Req, Res],
+        tab: TabId,
+      )
+      (request: Req)
+      : IO[Res]
+
+    /**
+      * The value of `shared` in `tab`, which is its default unless a content
+      * script there shares it.
+      */
+    def get[A](shared: Shared.Tab[A], tab: TabId): IO[A]
+
+    /**
+      * The value of `shared` in `tab`, then each new value that it is given,
+      * while a content script there shares it, and then its default, at which
+      * the stream ends. It does not see a content script that begins sharing it
+      * later.
+      */
+    def values[A](shared: Shared.Tab[A], tab: TabId): Stream[IO, A]
 
   /** The extension's toolbar button. */
   trait Action:

@@ -2,14 +2,55 @@ package com.alecdorrington.omnibrowser.webext
 
 import cats.effect.IO
 import cats.syntax.all.*
-import com.alecdorrington.omnibrowser.{Codec, Endpoint, MessagingError, Sender}
+import com.alecdorrington.omnibrowser.{
+  Codec, Endpoint, MessagingError, Sender, Shared,
+}
+import com.alecdorrington.omnibrowser.webext.Interop.promise
 import scala.scalajs.js
 
 /**
   * The messages through which an extension's parts make requests of each other,
-  * which the browser serialises as JSON.
+  * and share values with each other, which the browser serialises as JSON.
   */
 private[omnibrowser] object Messages:
+
+  /**
+    * Makes the request `request` of `endpoint`, sending it through `send`, and
+    * gives the response.
+    */
+  def exchange[Req, Res]
+    (
+      endpoint: Endpoint[Req, Res],
+      request: Req,
+    )
+    (send: js.Any => js.Promise[js.Any])
+    : IO[Res] = promise(send(Messages.request(endpoint, request)))
+    .adaptError { case js.JavaScriptException(error) =>
+      MessagingError(endpoint.name, error.toString)
+    }
+    .flatMap(response(endpoint, _))
+
+  /**
+    * A listener that answers the requests of `endpoint` through `run`, which
+    * `launch` starts, and leaves every other message to the other listeners.
+    */
+  def listener[Req, Res]
+    (
+      endpoint: Endpoint[Req, Res],
+      launch: IO[Unit] => Unit,
+    )
+    (run: (Req, Sender) => IO[Res])
+    : MessageListener = (message, sender, respond) =>
+    val mine = Messages.endpoint(message).contains(endpoint.name)
+    if mine then
+      launch(
+        answer(
+          endpoint,
+          payload(message),
+          Messages.sender(sender),
+        )(run).map(respond(_)),
+      )
+    mine
 
   /** A request of `endpoint`. */
   def request[Req, Res]
@@ -51,6 +92,10 @@ private[omnibrowser] object Messages:
   /** A response saying why a request failed. */
   def failure(error: String): js.Any = js.Dynamic.literal(error = error)
 
+  /** Whether `message` answers a request, as no response does if none came. */
+  def isAnswer(message: js.Any): Boolean = hasField(message, "response") ||
+    hasField(message, "error")
+
   /** The response that `message` holds to a request of `endpoint`. */
   def response[Req, Res]
     (
@@ -61,6 +106,32 @@ private[omnibrowser] object Messages:
     decode(endpoint.response, message).leftMap(MessagingError(endpoint.name, _)),
   )
 
+  /** A message through a port, holding a new value. */
+  def value(json: js.Any): js.Any = js.Dynamic.literal(value = json)
+
+  /** The value of `shared` that `message`, from a port, holds. */
+  def value[A](shared: Shared.Tab[A], message: js.Any): IO[A] = IO.fromEither(
+    field(message, "value")
+      .toRight("The message holds no value.")
+      .flatMap(shared.codec.decode)
+      .leftMap(MessagingError(shared.name, _)),
+  )
+
+  private def answer[Req, Res]
+    (
+      endpoint: Endpoint[Req, Res],
+      request: js.Any,
+      sender: Sender,
+    )
+    (run: (Req, Sender) => IO[Res])
+    : IO[js.Any] = IO
+    .fromEither(
+      endpoint.request.decode(request).leftMap(MessagingError(endpoint.name, _)),
+    )
+    .flatMap(run(_, sender))
+    .map(response => success(endpoint.response.encode(response)))
+    .handleError(error => failure(error.getMessage))
+
   private def decode[Res]
     (codec: Codec[Res], message: js.Any)
     : Either[String, Res] =
@@ -70,13 +141,12 @@ private[omnibrowser] object Messages:
       case (None, None)        => Left("Nothing in the extension serves it.")
 
   private def field(message: js.Any, name: String): Option[js.Any] = Option
-    .when(isObject(message) && hasField(message, name))(
+    .when(hasField(message, name))(
       message.asInstanceOf[js.Dynamic].selectDynamic(name),
     )
 
   private def isObject(message: js.Any): Boolean =
     js.typeOf(message) == "object" && message != null
 
-  private def hasField(message: js.Any, name: String): Boolean = message
-    .asInstanceOf[js.Object]
-    .hasOwnProperty(name)
+  private def hasField(message: js.Any, name: String): Boolean =
+    isObject(message) && message.asInstanceOf[js.Object].hasOwnProperty(name)

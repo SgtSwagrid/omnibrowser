@@ -72,6 +72,26 @@ browser.grants.request[Permission.Tabs].flatMap:
 
 A handler that needs to know who made a request takes its sender too, as in `serve(endpoint)((request, sender, browser) => ...)`, where `sender.tab` is the tab of the content script that asked, if one did.
 
+The background and pages may make requests of a tab's content scripts too, and read the values that they share, so that what a content script knows reaches the popup without passing through storage.
+A content script serves an `Endpoint.tab`, and shares a `Shared.tab` value from an fs2 `Signal`, each while its `Resource` is in use:
+
+```scala
+val problem = Shared.tab[String]("problem", "")
+val dismiss = Endpoint.tab[Unit, Unit]("dismiss")
+
+// In a content script.
+SignallingRef[IO].of("").flatMap(last =>
+  (browser.serve(dismiss)(_ => last.set("")) >> browser.share(problem)(last)).surround(...),
+)
+
+// In the background or a page.
+browser.tabs.call(dismiss, tab)(())
+browser.tabs.get(problem, tab)    // Its value now.
+browser.tabs.values(problem, tab) // Its value, then each new value.
+```
+
+While nothing in a tab shares a value, its value there is its default, as an unset `StorageKey`'s is, and a request of a tab where nothing serves the endpoint fails.
+
 Firefox for Android may install the extension unless it declares `android = Android.Unsupported`, and `Android.Supported(Some("120.0"))` sets the earliest version. The build warns of each permission that the extension asks for and Firefox for Android lacks.
 
 The browser asks the user only in response to their input, so a page's DOM event handler starts such a program with `browser.run(program)`, which runs it at once.
@@ -107,6 +127,7 @@ The browser connects Laminar to the extension:
   A transform that uses what the event carries names its type, as in `browser.updater(tags)((all, tag: String) => tag :: all)`, since Scala cannot infer it.
 - `browser.events(program)` is the result of an `IO`, and `browser.events(stream)` each value of an fs2 `Stream`, which runs while anything observes the event stream.
 - `browser.observer(event => program)` runs a program with each event, at once, as `browser.run` does, so that a request for permissions still sees the user's input.
+- In the background or a page, `browser.signal(shared, tab)` is the value of a `Shared.tab` in a tab, which goes back to its default once nothing there shares it, as in `browser.events(browser.tabs.active).collect { case Some(tab) => tab.id }.flatMapSwitch(browser.signal(problem, _))`.
 
 ## 🧪 Testing
 
@@ -126,6 +147,7 @@ test("A page's words are added to the total."):
 ```
 
 Each action (`visit`, `openPopup`, `clickAction`, `call`, `store`, ...) waits until the extension has finished responding to it, and fails if the extension failed.
+A test may also act as the background would, as in `browser.call(endpoint, page.tab.get)(request)` and `browser.shared(value, page.tab.get)`.
 `FakeBrowser.install` runs the extension's code within the test.
 
 Each page has a DOM if the tests can load [jsdom](https://github.com/jsdom/jsdom), which `npm install --save-dev jsdom` installs into the project's `node_modules`, and Laminar's pages need one.
