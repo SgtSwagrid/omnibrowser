@@ -7,6 +7,13 @@ import scala.scalajs.reflect.annotation.EnableReflectiveInstantiation
   * A browser extension, defined by an object extending this class, which the
   * `sbt-omnibrowser` plugin builds for each target browser.
   *
+  * Each part of the extension, its [[background]], [[contentScripts]],
+  * [[popup]] and [[options]], is a method, so that it is built only when that
+  * part starts, and its code is bundled only where it runs. A content script's
+  * bundle holds what its own method reaches, and whatever the object's own
+  * values reach, so they should be only what every part shares, such as its
+  * [[Endpoint]]s and [[StorageKey]]s.
+  *
   * @tparam P
   *   The extension's permissions, as an intersection of [[Permission]] types
   *   such as `Permission.Storage & Permission.Tabs`, or `Any` for none. They
@@ -26,16 +33,16 @@ abstract class BrowserExtension[P : Permissions as P]:
   def icons: Map[Int, String] = Map.empty
 
   /** Handles events while no page of the extension need be open. */
-  def background: Background = Background()
+  def background(): Background = Background()
 
   /** The scripts injected into the pages they match. */
-  def contentScripts: Seq[ContentScript] = Seq.empty
+  def contentScripts(): Seq[ContentScript] = Seq.empty
 
   /** The page shown when the user clicks the extension's toolbar button. */
-  def popup: Option[Page] = None
+  def popup(): Option[Page] = None
 
   /** The page in which the user changes the extension's settings. */
-  def options: Option[Page] = None
+  def options(): Option[Page] = None
 
   /**
     * The data that the extension collects or sends elsewhere, which Firefox

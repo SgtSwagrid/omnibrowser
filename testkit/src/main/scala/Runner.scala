@@ -87,7 +87,7 @@ private[testkit] final class InProcess
   override def optionalHosts: Seq[String] = extension.optionalHosts
 
   override def contentScripts: Seq[Seq[String]] = extension
-    .contentScripts
+    .contentScripts()
     .map(_.matches)
 
   override def hasPage(kind: PageKind): Boolean = kind.of(extension).isDefined
@@ -108,7 +108,7 @@ private[testkit] final class InProcess
     : Unit =
     show(document)
     indices
-      .flatMap(extension.contentScripts.lift)
+      .flatMap(extension.contentScripts().lift)
       .foreach(launcher.contentScript(_, browser(context)))
 
   override def startPage

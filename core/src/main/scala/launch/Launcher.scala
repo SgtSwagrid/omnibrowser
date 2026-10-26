@@ -26,7 +26,7 @@ private[omnibrowser] final class Launcher(val launch: IO[Unit] => Unit):
       browser: => Browser,
       api: WebExtensionApi,
     )
-    : Unit = extension.background.handlers.foreach(register(api, browser))
+    : Unit = extension.background().handlers.foreach(register(api, browser))
 
   /** Runs a content script in the page into which it was injected. */
   def contentScript

@@ -1,12 +1,18 @@
 package com.alecdorrington.omnibrowser.plugin
 
 import org.scalajs.jsenv.nodejs.NodeJSEnv
-import org.scalajs.linker.interface.{ESVersion, OutputPatterns, Report}
-import org.scalajs.sbtplugin.ScalaJSPlugin
+import org.scalajs.linker.interface.{
+  ClearableLinker, ESVersion, LinkingException, ModuleInitializer,
+  OutputPatterns, Report,
+}
+import org.scalajs.sbtplugin.{CacheBox, ScalaJSPlugin}
 import org.scalajs.sbtplugin.ScalaJSPlugin.autoImport.*
 import sbt.{*, given}
 import sbt.Keys.*
 import sbt.internal.util.MessageOnlyException
+import scala.concurrent.Await
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.duration.Duration
 import xsbt.api.Discovery
 import xsbti.api.{ClassLike, Parameterized, Type}
 import xsbti.compile.CompileAnalysis
@@ -66,8 +72,20 @@ object OmnibrowserPlugin extends AutoPlugin:
   /** The ECMAScript version that every extension's bundle is linked for. */
   private val esVersion = ESVersion.ES2021
 
-  /** The entry point of every extension's bundle. */
+  /** The entry point of every extension's main bundle. */
   private val entry = "com.alecdorrington.omnibrowser.launch.Entry"
+
+  /** The entry point of the bundle of every extension's content scripts. */
+  private val contentEntry =
+    "com.alecdorrington.omnibrowser.launch.ContentEntry"
+
+  /**
+    * The linker of the content scripts' bundle at each stage, kept from one
+    * build to the next so that each links again only what changed.
+    */
+  private val contentLinker = settingKey[CacheBox[ClearableLinker]](
+    "The linker of the content scripts' bundle.",
+  )
 
   /**
     * The environment variable through which the tests learn where the extension
@@ -93,6 +111,8 @@ object OmnibrowserPlugin extends AutoPlugin:
       (_.withESFeatures(_.withESVersion(esVersion))),
     Test / scalaJSLinkerConfig ~=
       (_.withESFeatures(_.withESVersion(esVersion))),
+    Compile / fastLinkJS / contentLinker := CacheBox(),
+    Compile / fullLinkJS / contentLinker := CacheBox(),
     omnibrowserBuild   := assemble(fastLinkJS, "development").value,
     omnibrowserPackage := zip(assemble(fullLinkJS, "release")).value,
 
@@ -129,6 +149,7 @@ object OmnibrowserPlugin extends AutoPlugin:
     : Def.Initialize[Task[Seq[File]]] = Def.task {
     (Compile / link).value
     val linked    = (Compile / link / scalaJSLinkerOutputDirectory).value
+    val content   = linkContent(link).value
     val extension = extensionName.value
     val directory = layouts(mode).value
     val runner    = Runner.write(streams.value.cacheDirectory)
@@ -141,12 +162,46 @@ object OmnibrowserPlugin extends AutoPlugin:
       .map(browser =>
         Assembly(extension, browser, build, geckoId).into(
           directory / browser.id,
-          linked,
+          Seq(linked, content),
           assets,
           runner,
           log,
         ),
       )
+  }
+
+  /**
+    * Links the content scripts' own bundle, beside the main one that `link`
+    * links and at the same stage, from the same code but from their own entry
+    * point, so that it holds only what they reach.
+    */
+  private def linkContent
+    (link: TaskKey[Attributed[Report]])
+    : Def.Initialize[Task[File]] = Def.task {
+    val implementation = (Compile / scalaJSLinkerImpl).value
+    val config         = (Compile / link / scalaJSLinkerConfig)
+      .value
+      .withOutputPatterns(OutputPatterns.fromJSFile(Assembly.contentBundle))
+    val linker = (Compile / link / contentLinker)
+      .value
+      .ensure(implementation.clearableLinker(config))
+    val ir        = (Compile / scalaJSIR).value.data
+    val linked    = (Compile / link / scalaJSLinkerOutputDirectory).value
+    val log       = LinkerLog(streams.value.log)
+    val directory = linked.getParentFile / s"${ linked.getName }-content"
+    val entry     = ModuleInitializer.mainMethodWithArgs(contentEntry, "main")
+    IO.createDirectory(directory)
+    val output = implementation.outputDirectory(directory.toPath)
+    try
+      Await.result(
+        linker.link(ir, Seq(entry), output, log),
+        Duration.Inf,
+      )
+    catch
+      case _: LinkingException => throw MessageOnlyException(
+          "The content scripts' bundle failed to link.",
+        )
+    directory
   }
 
   /** Zips each layout of the extension that `layouts` makes, for release. */

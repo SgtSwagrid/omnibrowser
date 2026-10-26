@@ -8,8 +8,11 @@ private[omnibrowser] object Layout:
 
   val manifest = "manifest.json"
 
-  /** The linked bundle, which every part of the extension loads. */
+  /** The main bundle, which the background and pages load. */
   val bundle = "omnibrowser.js"
+
+  /** The bundle that the content scripts load, of their code alone. */
+  val contentBundle = "omnibrowser-content.js"
 
   /** The background's bootstrap. */
   val background = "background.js"

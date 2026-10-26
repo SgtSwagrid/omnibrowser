@@ -24,7 +24,7 @@ object WordCount extends BrowserExtension[Storage]:
   /** A word, of letters and numbers in any script, as in `héllo` or `привет`. */
   private val word = """[\p{L}\p{N}']+""".r
 
-  override val background = Background(
+  override def background() = Background(
     serve(count): (text, browser) =>
       val words = word.findAllIn(text).size
       browser
@@ -34,11 +34,11 @@ object WordCount extends BrowserExtension[Storage]:
         .as(words),
   )
 
-  override val contentScripts = Seq(ContentScript("https://*/*")(browser =>
+  override def contentScripts() = Seq(ContentScript("https://*/*")(browser =>
     browser.runtime.call(count)(document.body.innerText).void,
   ))
 
-  override val popup = Some(Page(browser =>
+  override def popup() = Some(Page(browser =>
     browser
       .storage
       .get(total)
