@@ -76,6 +76,7 @@ Messages and stored values hold JSON, through a `Codec`: there are codecs of the
 Firefox shows the user what personal data an extension collects, and its store requires every new extension to say: override `dataCollection` if yours collects any, as it otherwise declares none.
 
 `sbt omnibrowserBuild` lays it out for Chrome and Firefox, ready to load unpacked, and `sbt omnibrowserPackage` zips a release for each browser's store.
+A release holds no source map, so that it builds the same wherever it is built, as stores that rebuild it from its source expect.
 See [the example](example/src/main/scala/WordCount.scala) for the whole of this extension.
 
 ## 🧪 Testing
