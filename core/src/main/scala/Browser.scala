@@ -44,8 +44,11 @@ trait TabBrowser extends ContentBrowser:
     * that began last is its owner, until it stops. Once none shares it, the
     * value there is the default again.
     *
-    * A page that begins sharing values tells the background and pages, so that
-    * those watching its tab find it, which may wake the background.
+    * A page that begins sharing values tells the background and pages, and
+    * tells them again when it returns from the back-forward cache, or is shown
+    * after being prerendered, so that those watching its tab find it. Each time
+    * reaches every open page of the extension, and wakes the background if it
+    * serves any endpoint.
     */
   def share[A](shared: Shared.Tab[A])(signal: Signal[IO, A]): Resource[IO, Unit]
 
@@ -137,11 +140,13 @@ object Browser:
       * whenever nothing there shares it, as before a content script there
       * begins sharing it, after it stops, or while the tab loads another page,
       * and otherwise the value that the content script shares. It follows the
-      * tab from page to page, until the stream is stopped.
+      * tab from page to page, and ends with the default once the tab closes.
       *
       * Chrome may stop the background while it watches, as an open port does
       * not keep it running, so a page, such as the popup, is the place to
-      * watch.
+      * watch. Firefox may keep a port to a page in its back-forward cache open,
+      * so the value there is that page's last until it returns, or until
+      * another page in the tab begins sharing values.
       */
     def values[A](shared: Shared.Tab[A], tab: TabId): Stream[IO, A]
 

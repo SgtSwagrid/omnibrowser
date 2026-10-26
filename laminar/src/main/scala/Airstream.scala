@@ -74,17 +74,18 @@ extension [B <: ContentBrowser](browser: B)
     )
 
   /**
-    * The value of `shared` in `tab`, as the background or a page sees it, while
-    * anything observes the signal: its default whenever nothing there shares
-    * it, as before a content script there begins sharing it, after it stops, or
-    * while the tab loads another page, and otherwise the value that the content
-    * script shares, then each new value.
+    * The value of `shared` in `tab`, as a page sees it (or the background,
+    * though Chrome may stop it meanwhile, as [[Browser.Tabs.values]] says),
+    * while anything observes the signal: its default whenever nothing there
+    * shares it, as before a content script there begins sharing it, after it
+    * stops, or while the tab loads another page, and otherwise the value that
+    * the content script shares, then each new value.
     */
   def signal[A]
     (shared: Shared.Tab[A], tab: TabId)
     (
       using @implicitNotFound(
-        "Only the background and pages watch a tab's shared values, which a content script shares.",
+        "A content script shares a tab's values, which only pages and the background watch.",
       )
       asBrowser: B <:< Browser,
     )

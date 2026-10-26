@@ -8,8 +8,19 @@ import scala.scalajs.js
 /** Conversions from the WebExtensions API's promises, events and ports. */
 private[omnibrowser] object Interop:
 
-  /** The result of the promise that `start` makes. */
-  def promise[A](start: => js.Promise[A]): IO[A] = IO.fromPromise(IO(start))
+  /**
+    * The result of the promise that `start` makes. The promise is handled at
+    * once, as a program that runs at once until its first asynchronous step
+    * only waits for it afterwards, so that its failure is not reported as
+    * unhandled meanwhile. The program still fails with it.
+    */
+  def promise[A](start: => js.Promise[A]): IO[A] =
+    IO.fromPromise(IO(handled(start)))
+
+  /** `promise`, once it is handled, as by a listener that ignores failure. */
+  private def handled[A](promise: js.Promise[A]): js.Promise[A] =
+    promise.asInstanceOf[js.Dynamic].applyDynamic("catch")(ignore)
+    promise
 
   /**
     * The values that `event` gives a listener while the stream runs, where
@@ -46,6 +57,9 @@ private[omnibrowser] object Interop:
       )
       message <- Stream.fromQueueNoneTerminated(offer.queue)
     yield message
+
+  /** A listener that ignores what it hears. */
+  private val ignore: js.Function1[js.Any, Unit] = _ => ()
 
   /** Adds `listener` to `event` while the resource is in use. */
   def listening[L <: js.Function]

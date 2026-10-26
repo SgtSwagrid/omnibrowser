@@ -138,10 +138,12 @@ private[omnibrowser] final class WebExtensionTabs
     .map(_.getOrElse(shared.default))
 
   override def values[A](shared: Shared.Tab[A], tab: TabId): Stream[IO, A] =
-    Interop
+    (Interop
       .eventsFrom(())(runtime.onMessage)(announced(tab))
       .switchMap(_ => watch(shared, tab))
-      .changes(using Eq.fromUniversalEquals)
+      .interruptWhen(closing(tab)) ++ Stream.emit(shared.default)).changes(
+      using Eq.fromUniversalEquals,
+    )
 
   private def query(info: js.Object): IO[List[Tab]] = promise(api.query(info))
     .map(_.toList.map(WebExtensionTabs.tab))
@@ -170,6 +172,11 @@ private[omnibrowser] final class WebExtensionTabs
         Messages.sender(sender).tab.exists(_.id == tab)
       then emit(())
       false
+
+  /** Whether each tab that closes is `tab`, which ends a watch of it. */
+  private def closing(tab: TabId): Stream[IO, Boolean] = Interop.events(
+    api.onRemoved,
+  )(emit => (closed: Int, _: js.Any) => emit(closed == tab.toInt))
 
   private def isAnnouncement(message: js.Any): Boolean = Messages
     .endpoint(message)

@@ -122,6 +122,8 @@ private[omnibrowser] trait TabsApi extends js.Object:
 
   def connect(tabId: Int, info: js.Object): PortApi = js.native
 
+  val onRemoved: Event[js.Function2[Int, js.Any, Unit]] = js.native
+
 @js.native
 private[omnibrowser] trait TabApi extends js.Object:
 

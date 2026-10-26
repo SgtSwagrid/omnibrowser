@@ -88,13 +88,8 @@ private[testkit] final class FakeRuntime
     : Boolean =
     error = failure
     read = false
-    Try(action()).fold(
-      error =>
-        this.error = js.undefined
-        throw error
-      ,
-      _ => this.error = js.undefined,
-    )
+    try action()
+    finally error = js.undefined
     read
 
   val onMessage: FakeEvent   = FakeEvent()
@@ -154,6 +149,8 @@ private[testkit] final class FakeTabs
     )
     : js.Promise[js.Any] = simulation.deliver(context, tabId, message)
 
+  val onRemoved: FakeEvent = FakeEvent()
+
   def connect(tabId: Int, info: js.UndefOr[js.Dynamic]): FakePort = simulation
     .connect(
       context,
@@ -206,10 +203,22 @@ private[testkit] final class FakePort
   /** Whether this end is still connected. */
   private[testkit] final def isOpen: Boolean = connected
 
+  /** Disconnects this end, of which neither end hears. */
+  private[testkit] final def close(): Unit = connected = false
+
   /** Disconnects this end, as the other end did, and tells its listeners. */
   private[testkit] final def drop(): Unit = if connected then
     connected = false
     onDisconnect.fire(this)
+
+private[testkit] object FakePort:
+
+  /** The two ends of a new port named `name`, each the other's peer. */
+  def pair(name: String, simulation: Simulation): (FakePort, FakePort) =
+    val (near, far) = (FakePort(name, simulation), FakePort(name, simulation))
+    near.peer = far
+    far.peer = near
+    (near, far)
 
 private[testkit] final class FakeAction
   (simulation: Simulation)

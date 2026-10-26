@@ -95,9 +95,13 @@ private final class Owner[A]
   extends js.Object:
 
   def attach(port: PortApi): js.Function0[Unit] =
+    // Stopped at once, so that nothing is sent after what the hub sends next.
+    var live    = true
     val stopped = Deferred.unsafe[IO, Unit]
-    launch(publish(port).race(stopped.get).void)
-    () => launch(stopped.complete(()).void)
+    launch(publish(port, () => live).race(stopped.get).void)
+    () =>
+      live = false
+      launch(stopped.complete(()).void)
 
   def read(respond: js.Function1[js.Any, Unit]): Unit = launch(
     signal
@@ -108,12 +112,14 @@ private final class Owner[A]
   )
 
   /**
-    * Sends through `port` the value, then each new value, until sending fails,
-    * when the port is gone.
+    * Sends through `port` the value, then each new value, while it is `live`,
+    * until sending fails, when the port is gone.
     */
-  private def publish(port: PortApi): IO[Unit] = signal
+  private def publish(port: PortApi, live: () => Boolean): IO[Unit] = signal
     .discrete
-    .foreach(value => IO(port.postMessage(Messages.value(codec.encode(value)))))
+    .foreach(value =>
+      IO(if live() then port.postMessage(Messages.value(codec.encode(value)))),
+    )
     .compile
     .drain
     .handleError(_ => hub.drop(port))
@@ -234,17 +240,47 @@ private object Hub:
   /**
     * A new hub of the page whose API is `api`, which listens, and which tells
     * the background and pages that the page has begun sharing values, so that
-    * their watchers connect to it again.
+    * their watchers connect to it again, and tells them again each time that
+    * the page returns.
     */
   private def started(api: RuntimeApi, launch: IO[Unit] => Unit): Hub =
     val hub = Hub(api)
     hub.listen()
-    launch(
-      promise(api.sendMessage(Messages.request(Shared.announcement, ())))
-        .void
-        .handleError(_ => ()),
-    )
+    val announce = () =>
+      launch(
+        promise(api.sendMessage(Messages.request(Shared.announcement, ())))
+          .void
+          .handleError(_ => ()),
+      )
+    announce()
+    onReturn(announce)
     hub
+
+  /**
+    * Runs `announce` each time that the page returns: from the back-forward
+    * cache, which closed its ports, or into view after it was prerendered,
+    * while its tab showed another page.
+    */
+  private def onReturn(announce: () => Unit): Unit =
+    val global = js.Dynamic.global.globalThis
+    listen(global, "pageshow")(event =>
+      if event.persisted.asInstanceOf[js.UndefOr[Boolean]].contains(true) then
+        announce(),
+    )
+    listen(global.document, "prerenderingchange")(_ => announce())
+
+  /** Has `target`, if it is one, run `handle` with each event named `name`. */
+  private def listen
+    (target: js.Dynamic, name: String)
+    (handle: js.Dynamic => Unit)
+    : Unit =
+    if !js.isUndefined(target) &&
+      js.typeOf(target.addEventListener) == "function"
+    then
+      target.addEventListener(
+        name,
+        handle: js.Function1[js.Dynamic, Unit],
+      )
 
   private def hubs: js.Dynamic =
     val global = js.Dynamic.global.globalThis

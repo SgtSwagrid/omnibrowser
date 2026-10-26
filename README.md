@@ -91,9 +91,11 @@ browser.tabs.values(problem, tab) // Its value, then each new value.
 ```
 
 While nothing in a tab shares a value, its value there is its default, as an unset `StorageKey`'s is, and a request of a tab where nothing serves the endpoint fails.
-`values` follows the tab: it gives the default before a content script there begins sharing the value, after it stops, and while the tab loads another page, whose content script it then finds, as a page that begins sharing values tells the rest of the extension.
+`values` follows the tab: it gives the default before a content script there begins sharing the value, after it stops, and while the tab loads another page, whose content script it then finds, and it ends once the tab closes.
+It finds them as a page that begins sharing values tells the rest of the extension, and tells it again on returning from the back-forward cache or on being shown after it was prerendered. Each time reaches every open page of the extension, and wakes the background if it serves any endpoint.
 If several content scripts of one page share a value, the one that began last is its owner, until it stops.
 Chrome may stop the background while it watches a tab, as an open port does not keep it running, so watch from a page, such as the popup.
+Firefox may keep a port to a page in its back-forward cache open, so a watcher there sees that page's last value until it returns.
 Names beginning `omnibrowser/` are the library's own.
 
 Firefox for Android may install the extension unless it declares `android = Android.Unsupported`, and `Android.Supported(Some("120.0"))` sets the earliest version. The build warns of each permission that the extension asks for and Firefox for Android lacks.
@@ -131,7 +133,7 @@ The browser connects Laminar to the extension:
   A transform that uses what the event carries names its type, as in `browser.updater(tags)((all, tag: String) => tag :: all)`, since Scala cannot infer it.
 - `browser.events(program)` is the result of an `IO`, and `browser.events(stream)` each value of an fs2 `Stream`, which runs while anything observes the event stream.
 - `browser.observer(event => program)` runs a program with each event, at once, as `browser.run` does, so that a request for permissions still sees the user's input.
-- In the background or a page, `browser.signal(shared, tab)` is the value of a `Shared.tab` in a tab, which follows it as `browser.tabs.values` does, as in `browser.events(browser.tabs.active).collect { case Some(tab) => tab.id }.flatMapSwitch(browser.signal(problem, _))`.
+- In a page, `browser.signal(shared, tab)` is the value of a `Shared.tab` in a tab, which follows it as `browser.tabs.values` does, as in `browser.events(browser.tabs.active).collect { case Some(tab) => tab.id }.flatMapSwitch(browser.signal(problem, _))`.
 
 ## 🧪 Testing
 

@@ -149,7 +149,7 @@ class LaminarSuite extends CatsEffectSuite:
   test("A content script cannot watch a tab's shared value."):
     assert(
       compileErrors("(??? : TabBrowser).signal(Presser.presses, TabId(1))")
-        .contains("Only the background and pages watch"),
+        .contains("A content script shares a tab's values"),
     )
 
 /** Counts clicks, with each of the ways in which Laminar uses the browser. */

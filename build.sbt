@@ -86,6 +86,25 @@ lazy val `omnibrowser-example` = project
     Npm.beforeTests,
   )
 
+/**
+  * An extension whose content scripts share a value in each way that a page's
+  * may, which its tests run as the plugin built it too, where each content
+  * script loads its own copy of the content bundle.
+  */
+lazy val `omnibrowser-sharing` = project
+  .in(file("sharing"))
+  .dependsOn(
+    `omnibrowser-core`,
+    `omnibrowser-testkit` % Test,
+  )
+  .enablePlugins(OmnibrowserPlugin)
+  .settings(
+    packagePrefix  := s"$projectRoot.sharing",
+    publish / skip := true,
+    Dependencies.munitCatsEffect,
+    Npm.beforeTests,
+  )
+
 lazy val omnibrowser = project
   .in(file("."))
   .enablePlugins(ScalaUnidocPlugin)
@@ -95,6 +114,7 @@ lazy val omnibrowser = project
     `omnibrowser-laminar`,
     `sbt-omnibrowser`,
     `omnibrowser-example`,
+    `omnibrowser-sharing`,
   )
   .settings(
     publish / skip                             := true,

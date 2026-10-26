@@ -5,7 +5,7 @@ import com.alecdorrington.omnibrowser.launch.{Json, Layout, PageKind}
 import scala.collection.mutable
 import scala.scalajs.js
 import scala.scalajs.js.JSConverters.*
-import scala.util.{Failure, Try}
+import scala.util.{Failure, Success, Try}
 
 /** Which part of the extension, or of a page, a context belongs to. */
 private[testkit] enum Kind:
@@ -28,10 +28,15 @@ private[testkit] enum Kind:
   /** Whether `runtime.sendMessage` reaches the context. */
   def isExtension: Boolean = this == Background || this == Page
 
-/** A context of the fake browser, with an API of its own. */
+/**
+  * A context of the fake browser, with an API of its own, which is alive until
+  * its page closes or navigates. It is mutable, as its page may go.
+  */
 private[testkit] final class FakeContext
   (val kind: Kind, simulation: Simulation):
+
   val api: FakeApi = FakeApi(simulation, this)
+  var alive        = true
 
 /** A tab of the fake browser. */
 private[testkit] final case class FakeTab(id: Int, url: String)
@@ -60,8 +65,8 @@ private[testkit] final class Simulation(runner: Runner, activity: Activity):
   /** Every port, as its two ends. */
   private val ports = mutable.ArrayBuffer.empty[(FakePort, FakePort)]
 
-  /** How to fail each request that each context has yet to answer. */
-  private val unanswered = mutable.Map.empty[FakeContext, List[() => Unit]]
+  /** The requests that each context has yet to answer. */
+  private val unanswered = mutable.Map.empty[FakeContext, List[Pending]]
 
   /** The text on the extension's badge, in tabs without their own. */
   var badge = ""
@@ -93,14 +98,13 @@ private[testkit] final class Simulation(runner: Runner, activity: Activity):
   def install(): Unit =
     val background = context(Kind.Background)
     runner.startBackground(background)
-    background
-      .api
-      .runtime
-      .onInstalled
-      .fire(js.Dynamic.literal(reason = "install"))
+    tell(background.api.runtime.onInstalled)(
+      js.Dynamic.literal(reason = "install"),
+    )
 
   /** Reports the start of the browser profile. */
-  def startup(): Unit = extension.foreach(_.api.runtime.onStartup.fire())
+  def startup(): Unit =
+    extension.foreach(context => tell(context.api.runtime.onStartup)())
 
   /**
     * Clicks the extension's toolbar button, which the background hears of only
@@ -108,7 +112,9 @@ private[testkit] final class Simulation(runner: Runner, activity: Activity):
     */
   def clickAction(): Unit = if !runner.hasPage(PageKind.Popup) then
     val tab = tabObject(activeTab.getOrElse(openTab("about:blank", "")._1))
-    background.foreach(_.api.action.foreach(_.onClicked.fire(tab)))
+    background.foreach(
+      _.api.action.foreach(action => tell(action.onClicked)(tab)),
+    )
 
   /**
     * Opens a tab at `url` showing `text`, into which the content scripts that
@@ -133,12 +139,21 @@ private[testkit] final class Simulation(runner: Runner, activity: Activity):
     tabs = tabs.map(old => if old.id == tab then loaded else old)
     load(loaded, text)
 
-  /** Closes `tab`, whose content scripts hear nothing more. */
+  /**
+    * Closes `tab`, whose content scripts hear nothing more, and reports it to
+    * the rest of the extension.
+    */
   def close(tab: Int): Unit =
     activity.touch()
     inTab(tab).foreach(destroy)
     tabs = tabs.filterNot(_.id == tab)
     if active.contains(tab) then active = tabs.lastOption.map(_.id)
+    val removal = js.Dynamic.literal(windowId = 1, isWindowClosing = false)
+    later(
+      contexts
+        .flatMap(_.api.tabs.toOption)
+        .foreach(api => tell(api.onRemoved)(tab, removal)),
+    )
 
   /** How many ports have either end still connected. */
   def openPorts: Int = ports.count((near, far) => near.isOpen || far.isOpen)
@@ -187,18 +202,9 @@ private[testkit] final class Simulation(runner: Runner, activity: Activity):
       name: String,
     )
     : FakePort =
-    val (near, far) = (FakePort(name, this), FakePort(name, this))
-    near.peer = far
-    far.peer = near
+    val (near, far) = FakePort.pair(name, this)
     ports += near -> far
-    later:
-      val receivers = inTab(tab).filterNot(_.api.runtime.onConnect.isQuiet)
-      if receivers.isEmpty then refuse(sender, near)
-      else
-        receivers.foreach(receiver =>
-          held(receiver) = far :: held.getOrElse(receiver, Nil),
-        )
-        receivers.foreach(_.api.runtime.onConnect.fire(far))
+    later(reach(sender, tab, near, far))
     near
 
   /**
@@ -220,7 +226,8 @@ private[testkit] final class Simulation(runner: Runner, activity: Activity):
 
   /**
     * Delivers `message` from `sender` to whichever of `receivers` listen, which
-    * fails if none of them does, as the browser does.
+    * fails if none of them does, or if `sender`'s page has gone, as the browser
+    * does.
     */
   private def send
     (
@@ -232,14 +239,14 @@ private[testkit] final class Simulation(runner: Runner, activity: Activity):
     activity.touch()
     new js.Promise[js.Any]((resolve, reject) =>
       val listeners = receivers.filterNot(_.api.runtime.onMessage.isQuiet)
-      if listeners.isEmpty then reject(js.Error(Simulation.unreachable))
+      if !sender.alive then reject(js.Error(Simulation.invalidated))
+      else if listeners.isEmpty then reject(js.Error(Simulation.unreachable))
       else
         respond(
           listeners,
           serialised(message),
           senderOf(sender),
-          resolve(_),
-          reject(_),
+          Pending(activity, resolve(_), reject(_)),
         ),
     )
 
@@ -249,7 +256,8 @@ private[testkit] final class Simulation(runner: Runner, activity: Activity):
     (result: => A)
     : js.Promise[A] =
     activity.touch()
-    if context.kind.isContent && area == "session" then
+    if !context.alive then js.Promise.reject(js.Error(Simulation.invalidated))
+    else if context.kind.isContent && area == "session" then
       js.Promise
         .reject(js.Error("Access to storage is not allowed from this context."))
     else js.Promise.resolve(result)
@@ -386,55 +394,88 @@ private[testkit] final class Simulation(runner: Runner, activity: Activity):
     .toSeq
 
   /**
-    * Gives each of `contexts` `message`, and `resolve` the first response, or
+    * Gives each of `contexts` `message`, and `request` the first response, or
     * nothing if none of them will respond. If one will, but its context is
-    * destroyed first, the request fails through `reject`, as the browser's
-    * does.
+    * destroyed first, the request fails, as the browser's does.
     */
   private def respond
     (
       contexts: Seq[FakeContext],
       message: js.Any,
       sender: js.Object,
-      resolve: js.Any => Unit,
-      reject: js.Any => Unit,
+      request: Pending,
     )
     : Unit =
-    activity.await()
-    var answered                       = false
-    def settle(outcome: => Unit): Unit = if !answered then
-      answered = true
-      activity.answer()
-      outcome
     val answer: js.Function1[js.Any, Unit] =
-      response => settle(resolve(serialised(response)))
-    val replies =
-      contexts.flatMap(_.api.runtime.onMessage.hear(message, sender, answer))
-    replies.collect { case Failure(error) => activity.fail(error) }
-    if !replies.exists(_.toOption.exists(isTrue)) then answer(js.undefined)
+      response => request.answer(serialised(response))
+    val replies = contexts.flatMap(context =>
+      tell(context.api.runtime.onMessage)(message, sender, answer),
+    )
+    if replies.exists(isTrue) then contexts.foreach(awaiting(_, request))
+    else answer(js.undefined)
+
+  /** Fails `request` if `context` is destroyed before answering it. */
+  private def awaiting(context: FakeContext, request: Pending): Unit =
+    unanswered(context) = request :: unanswered.getOrElse(context, Nil)
+
+  /**
+    * Gives `far` to the listeners of the content scripts of `tab`, or refuses
+    * the port if none listens.
+    */
+  private def reach
+    (
+      sender: FakeContext,
+      tab: Int,
+      near: FakePort,
+      far: FakePort,
+    )
+    : Unit =
+    val receivers = inTab(tab).filterNot(_.api.runtime.onConnect.isQuiet)
+    if receivers.isEmpty then refuse(sender, near, far)
     else
-      contexts.foreach(context =>
-        unanswered(context) =
-          (() => settle(reject(js.Error(Simulation.closed)))) ::
-            unanswered.getOrElse(context, Nil),
-      )
+      receivers.foreach: receiver =>
+        held(receiver) = far :: held.getOrElse(receiver, Nil)
+        tell(receiver.api.runtime.onConnect)(far)
+
+  /**
+    * Has `event`'s listeners hear `arguments`, and gives what each returned,
+    * reporting each failure as the extension's, as the browser does, without
+    * keeping the others from hearing.
+    */
+  private def tell(event: FakeEvent)(arguments: js.Any*): Seq[js.Any] = event
+    .hear(arguments*)
+    .flatMap:
+      case Success(reply) => Some(reply)
+      case Failure(error) =>
+        activity.fail(error)
+        None
 
   /**
     * Destroys `context`, as when its page closes or navigates, which hears
-    * nothing more, whose ports disconnect, and whose unanswered requests fail.
+    * nothing more, may do nothing more, whose ports disconnect, and whose
+    * unanswered requests fail.
     */
   private def destroy(context: FakeContext): Unit =
+    context.alive = false
     contexts -= context
     held.remove(context).foreach(_.foreach(_.disconnect()))
-    unanswered.remove(context).foreach(_.foreach(fail => fail()))
+    unanswered.remove(context).foreach(_.foreach(_.fail(Simulation.closed)))
 
   /**
-    * Disconnects `port`, which reached nothing, failing if `sender` does not
+    * Closes both ends of a port that reached nothing, of which `near` hears,
+    * unless its own side has closed it already, failing if `sender` does not
     * read why, as Chrome reports it as an error otherwise.
     */
-  private def refuse(sender: FakeContext, port: FakePort): Unit =
+  private def refuse
+    (
+      sender: FakeContext,
+      near: FakePort,
+      far: FakePort,
+    )
+    : Unit =
     val error = js.Error(Simulation.unreachable)
-    if !sender.api.runtime.failing(error, () => port.drop()) then
+    far.close()
+    if near.isOpen && !sender.api.runtime.failing(error, () => near.drop()) then
       activity.fail(UncheckedError(Simulation.unreachable))
 
   /**
@@ -464,7 +505,9 @@ private[testkit] final class Simulation(runner: Runner, activity: Activity):
       (old.map("oldValue" -> _) ++ value.map("newValue" -> _)).toSeq*,
     )
     val changes = js.Dictionary[js.Any](key -> change)
-    contexts.foreach(_.api.storage.onChanged.fire(changes, area))
+    contexts.foreach(context =>
+      tell(context.api.storage.onChanged)(changes, area),
+    )
 
   private def names(asked: js.Dynamic): Set[String] =
     strings(asked.permissions) ++ strings(asked.origins)
@@ -498,6 +541,33 @@ private[testkit] final class Simulation(runner: Runner, activity: Activity):
   private def isTrue(reply: js.Any): Boolean = js.typeOf(reply) == "boolean" &&
     reply.asInstanceOf[Boolean]
 
+/**
+  * A request awaiting its first response, given through `resolve`, or its
+  * failure, through `reject`, whichever comes first, which `activity` counts as
+  * pending until then. It is mutable, as the browser's callbacks settle it.
+  */
+private[testkit] final class Pending
+  (
+    activity: Activity,
+    resolve: js.Any => Unit,
+    reject: js.Any => Unit,
+  ):
+
+  activity.await()
+
+  private var settled = false
+
+  /** Gives the request `response`, unless it is settled already. */
+  def answer(response: js.Any): Unit = settle(resolve(response))
+
+  /** Fails the request with `reason`, unless it is settled already. */
+  def fail(reason: String): Unit = settle(reject(js.Error(reason)))
+
+  private def settle(outcome: => Unit): Unit = if !settled then
+    settled = true
+    activity.answer()
+    outcome
+
 private[testkit] object Simulation:
 
   /** The extension's ID in the fake browser. */
@@ -506,6 +576,9 @@ private[testkit] object Simulation:
   /** Why a message or port reached nothing, as the browser says. */
   val unreachable =
     "Could not establish connection. Receiving end does not exist."
+
+  /** Why a call failed from a context whose page has gone. */
+  val invalidated = "Extension context invalidated."
 
   /** Why a request failed when its receiver went before answering it. */
   val closed =

@@ -68,7 +68,16 @@ class SharingSuite extends CatsEffectSuite:
       request <- browser.call(Counter.hang, page.tab.get)(()).attempt.start
       _       <- IO.sleep(20.millis) >> browser.close(page.tab.get)
       result  <- request.joinWithNever
-    yield assert(failed(result, "hang"), result)
+    yield assert(
+      result
+        .left
+        .exists:
+          case MessagingError("hang", reason) =>
+            reason.contains("message channel closed")
+          case _ => false
+      ,
+      result,
+    )
 
   test("A tab's shared value is its content script's, or else its default."):
     for
@@ -138,18 +147,30 @@ class SharingSuite extends CatsEffectSuite:
       seen <- browser.stored(Counter.seen)
     yield assertEquals(seen, List(7, 0, 2))
 
-  test("A page sees the default once its tab closes."):
+  test("A page sees the default once its tab closes, and stops watching it."):
+    for
+      browser  <- FakeBrowser.install(Counter)
+      page     <- browser.visit("https://example.com/count")
+      _        <- browser.call(Counter.add, page.tab.get)(2)
+      _        <- browser.openPopup
+      _        <- browser.close(page.tab.get)
+      seen     <- browser.stored(Counter.seen)
+      finished <- browser.stored(Counter.finished)
+      count    <- browser.shared(Counter.count, page.tab.get)
+      open     <- browser.openPorts
+    yield
+      assertEquals(seen, List(0, 2))
+      assertEquals((finished, count, open), (true, 0, 0))
+
+  test("A value that its owner sets as it stops is not seen after it stops."):
     for
       browser <- FakeBrowser.install(Counter)
       page    <- browser.visit("https://example.com/count")
       _       <- browser.call(Counter.add, page.tab.get)(2)
       _       <- browser.openPopup
-      _       <- browser.close(page.tab.get)
+      _       <- browser.call(Counter.finish, page.tab.get)(())
       seen    <- browser.stored(Counter.seen)
-      count   <- browser.shared(Counter.count, page.tab.get)
-    yield
-      assertEquals(seen, List(0, 2))
-      assertEquals(count, 0)
+    yield assertEquals(seen.headOption, Some(0))
 
   test("Each page that watches a value sees it, and one that stops lets go."):
     for
@@ -218,6 +239,9 @@ object Counter extends BrowserExtension[Storage]:
   /** Is never answered. */
   val hang = Endpoint.tab[Unit, Unit]("hang")
 
+  /** Sets a page's count, then stops it counting at once. */
+  val finish = Endpoint.tab[Unit, Unit]("finish")
+
   /** [[add]], as it would be with the wrong request. */
   val misread = Endpoint.tab[String, Int]("add")
 
@@ -230,6 +254,9 @@ object Counter extends BrowserExtension[Storage]:
   /** Each count of the active tab that the options page has seen, latest first. */
   val alsoSeen = StorageKey.local[List[Int]]("alsoSeen", Nil)
 
+  /** Whether the popup has stopped watching the active tab. */
+  val finished = StorageKey.local[Boolean]("finished", false)
+
   /** A value that a page shares in place of its count. */
   private val other = Shared.tab[String]("other", "")
 
@@ -238,8 +265,9 @@ object Counter extends BrowserExtension[Storage]:
       (SignallingRef[IO].of(0), Deferred[IO, Unit]).flatMapN((total, stopped) =>
         (browser.serve(add)(adding(total)) >>
           browser.serve(stop)(_ => stopped.complete(()).void) >>
-          browser.serve(hang)(_ => IO.never) >> browser.share(count)(total))
-          .surround(stopped.get),
+          browser.serve(hang)(_ => IO.never) >> browser.serve(finish)(_ =>
+            total.set(9) >> stopped.complete(()).void,
+          ) >> browser.share(count)(total)).surround(stopped.get),
       ),
     ),
     ContentScript("https://*/silent")(
@@ -259,7 +287,9 @@ object Counter extends BrowserExtension[Storage]:
     ),
   )
 
-  override def popup() = Some(Page(watching(seen, _)))
+  override def popup() = Some(Page(browser =>
+    watching(seen, browser) >> browser.storage.set(finished, true),
+  ))
 
   override def options() = Some(Page(watching(alsoSeen, _, _ < 10)))
 
