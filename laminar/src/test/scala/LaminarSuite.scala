@@ -63,6 +63,15 @@ class LaminarSuite extends CatsEffectSuite:
       assertEquals(note, "Remember the milk.")
       assertEquals(synced, "Forget the milk.")
 
+  test("A reducer transforms a stored value by each event that it observes."):
+    for
+      browser <- FakeBrowser.install(Tally)
+      options <- browser.openOptions
+      _       <- options.enter(".tag", "dairy")
+      _       <- options.enter(".tag", "urgent")
+      tags    <- browser.stored(Tally.tags)
+    yield assertEquals(tags, List("urgent", "dairy"))
+
   test("A content script adds its element to the end of its page."):
     for
       browser <- FakeBrowser.install(Tally)
@@ -113,6 +122,9 @@ object Tally extends BrowserExtension[Storage]:
 
   val note = StorageKey.sync[String]("note", "")
 
+  /** Each tag entered, the most recent first. */
+  val tags = StorageKey.local[List[String]]("tags", Nil)
+
   override def background() =
     Background(serve(double)((number, _) => IO.pure(number * 2)))
 
@@ -155,6 +167,11 @@ object Tally extends BrowserExtension[Storage]:
         cls := "note",
         value <-- browser.signal(note),
         onChange.mapToValue --> browser.writer(note),
+      ),
+      input(
+        cls := "tag",
+        onChange.mapToValue -->
+          browser.reducer(tags)((all, tag: String) => tag :: all),
       ),
     ),
   ))

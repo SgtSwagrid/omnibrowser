@@ -49,6 +49,21 @@ extension (browser: ContentBrowser)
     : Observer[Any] = observer(_ => browser.storage.update(key)(transform).void)
 
   /**
+    * Transforms the value of `key` by `transform` with each event that the
+    * observer observes, as in
+    * `browser.reducer(tags)((all, tag: String) => tag :: all)`. Scala cannot
+    * infer the event's type from where the observer is bound, so `transform`
+    * names it. An update that another part of the extension makes meanwhile may
+    * be lost.
+    */
+  def reducer[A, E]
+    (key: StorageKey[A])
+    (transform: (A, E) => A)
+    (using Granted[Storage])
+    : Observer[E] =
+    observer(event => browser.storage.update(key)(transform(_, event)).void)
+
+  /**
     * Runs `program` with each value that the observer observes, at once, as
     * from the handler of a DOM event, through [[ContentBrowser.run]], so that
     * an API that needs the user's input still sees it.
