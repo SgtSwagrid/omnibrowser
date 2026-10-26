@@ -9,6 +9,7 @@ object Dependencies:
     val catsEffect = "3.7.1"
     val fs2        = "3.14.0"
     val scalajsDom = "2.8.1"
+    val laminar    = "18.0.0-M5"
     val munit      = "1.3.6"
 
     val munitCatsEffect = "2.2.1"
@@ -26,6 +27,9 @@ object Dependencies:
 
   lazy val scalajsDom =
     libraryDependencies += "org.scala-js" %% "scalajs-dom" % V.scalajsDom
+
+  lazy val laminar =
+    libraryDependencies += "com.raquo" %% "laminar" % V.laminar
 
   lazy val munit =
     libraryDependencies += "org.scalameta" %% "munit" % V.munit % Test

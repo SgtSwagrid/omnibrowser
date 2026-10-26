@@ -16,6 +16,9 @@ ThisBuild / scalacOptions ++= Seq(
 
 val projectRoot = "com.alecdorrington.omnibrowser"
 
+// The tests give the fake browser's pages a DOM through jsdom, from npm.
+Npm.installation
+
 /** The library itself: the model of the browser, and its implementation. */
 lazy val `omnibrowser-core` = project
   .in(file("core"))
@@ -37,6 +40,22 @@ lazy val `omnibrowser-testkit` = project
   .settings(
     packagePrefix := s"$projectRoot.testkit",
     Dependencies.munitCatsEffect,
+    Npm.beforeTests,
+  )
+
+/** Pages and content scripts whose content Laminar renders. */
+lazy val `omnibrowser-laminar` = project
+  .in(file("laminar"))
+  .dependsOn(
+    `omnibrowser-core`,
+    `omnibrowser-testkit` % Test,
+  )
+  .enablePlugins(ScalaJSPlugin)
+  .settings(
+    packagePrefix := s"$projectRoot.laminar",
+    Dependencies.laminar,
+    Dependencies.munitCatsEffect,
+    Npm.beforeTests,
   )
 
 /** The sbt plugin that builds extensions written with the library. */
@@ -54,12 +73,17 @@ lazy val `sbt-omnibrowser` = project
 /** An extension built with the library and the plugin, as a test of both. */
 lazy val `omnibrowser-example` = project
   .in(file("example"))
-  .dependsOn(`omnibrowser-core`, `omnibrowser-testkit` % Test)
+  .dependsOn(
+    `omnibrowser-core`,
+    `omnibrowser-laminar`,
+    `omnibrowser-testkit` % Test,
+  )
   .enablePlugins(OmnibrowserPlugin)
   .settings(
     packagePrefix  := s"$projectRoot.example",
     publish / skip := true,
     Dependencies.munitCatsEffect,
+    Npm.beforeTests,
   )
 
 lazy val omnibrowser = project
@@ -68,12 +92,16 @@ lazy val omnibrowser = project
   .aggregate(
     `omnibrowser-core`,
     `omnibrowser-testkit`,
+    `omnibrowser-laminar`,
     `sbt-omnibrowser`,
     `omnibrowser-example`,
   )
   .settings(
-    publish / skip := true,
-    ScalaUnidoc / unidoc / unidocProjectFilter :=
-      inProjects(`omnibrowser-core`, `omnibrowser-testkit`),
+    publish / skip                             := true,
+    ScalaUnidoc / unidoc / unidocProjectFilter := inProjects(
+      `omnibrowser-core`,
+      `omnibrowser-testkit`,
+      `omnibrowser-laminar`,
+    ),
     ScalaUnidoc / unidoc / scalacOptions ++= Seq("-project", "Omnibrowser"),
   )

@@ -26,6 +26,11 @@ lazy val extension = project.enablePlugins(OmnibrowserPlugin)
 ```
 
 The plugin adds the library, `omnibrowser-core`, and the testkit for your tests, `omnibrowser-testkit`, at its own version, which `omnibrowserVersion` holds.
+To write the extension's pages with [Laminar](https://laminar.dev), add `omnibrowser-laminar` too:
+
+```scala
+libraryDependencies += "com.alecdorrington" %% "omnibrowser-laminar" % omnibrowserVersion.value
+```
 
 ## 🚀 Usage
 
@@ -79,6 +84,29 @@ Firefox shows the user what personal data an extension collects, and its store r
 A release holds no source map, so that it builds the same wherever it is built, as stores that rebuild it from its source expect.
 See [the example](example/src/main/scala/WordCount.scala) for the whole of this extension.
 
+## 🌿 Laminar
+
+With `omnibrowser-laminar`, [Laminar](https://laminar.dev) renders a page, or the element that a content script adds to its page:
+
+```scala
+import com.alecdorrington.omnibrowser.laminar.*
+import com.raquo.laminar.api.L.*
+
+override def popup() = Some(LaminarPage(browser =>
+  div(
+    p(child.text <-- browser.signal(total).map(sum => s"$sum words counted.")),
+    button("Reset", onClick --> browser.observer(_ => browser.runtime.call(reset)(()))),
+  ),
+))
+```
+
+`LaminarPage(...)` renders its element at the end of the page's body, and `LaminarContentScript("https://*/*")(...)` at the end of the body of each page that it matches.
+The browser connects Laminar to the extension:
+
+- `browser.signal(key)` is the stored value of a `StorageKey`, which is its default until it has been read, and `browser.writer(key)` stores each value that it observes, as in `onInput.mapToChecked --> browser.writer(enabled)`, while `browser.updater(key)(_ + 1)` transforms the stored value with each event.
+- `browser.events(program)` is the result of an `IO`, and `browser.events(stream)` each value of an fs2 `Stream`, which runs while anything observes the event stream.
+- `browser.observer(event => program)` runs a program with each event, at once, as `browser.run` does, so that a request for permissions still sees the user's input.
+
 ## 🧪 Testing
 
 `FakeBrowser`, from the testkit, is a browser that keeps everything in memory.
@@ -97,8 +125,12 @@ test("A page's words are added to the total."):
 ```
 
 Each action (`visit`, `openPopup`, `clickAction`, `call`, `store`, ...) waits until the extension has finished responding to it, and fails if the extension failed.
-`FakeBrowser.install` runs the extension's code within the test, where a page's document is a stand-in with only a body of text.
-`FakeBrowser.installBuilt(Target.Chrome)` instead runs the extension as the plugin built it for that browser, with each part in a sandbox of its own; the plugin builds it before the tests run.
+`FakeBrowser.install` runs the extension's code within the test.
+
+Each page has a DOM if the tests can load [jsdom](https://github.com/jsdom/jsdom), which `npm install --save-dev jsdom` installs into the project's `node_modules`, and Laminar's pages need one.
+A test may then act on the page's elements as the user would, as in `popup.click("button")`, `popup.enter("input", "Ada")` and `popup.text("p")`.
+Without jsdom, a page's document is a stand-in with only a body of text.
+`FakeBrowser.installBuilt(Target.Chrome)` instead runs the extension as the plugin built it for that browser, with each part in a sandbox of its own, which for a page, given jsdom, is a window made from the HTML that the plugin wrote; the plugin builds it before the tests run.
 
 ## 👁️ See also
 

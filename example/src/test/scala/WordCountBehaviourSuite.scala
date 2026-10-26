@@ -38,11 +38,28 @@ class WordCountBehaviourSuite extends CatsEffectSuite:
         total <- browser.stored(WordCount.total)
         badge <- browser.badge
         popup <- browser.openPopup
-        text  <- popup.text
+        text  <- popup.text("p")
       yield
         assertEquals(total, 9)
         assertEquals(badge, "9")
         assertEquals(text, "9 words counted.")
+
+    test(s"The popup's button resets the count, $name."):
+      for
+        browser <- install
+        _       <- browser.visit(
+          "https://example.com/",
+          "Three short words",
+        )
+        popup <- browser.openPopup
+        _     <- popup.click("button")
+        total <- browser.stored(WordCount.total)
+        badge <- browser.badge
+        text  <- popup.text("p")
+      yield
+        assertEquals(total, 0)
+        assertEquals(badge, "")
+        assertEquals(text, "0 words counted.")
 
     test(s"Pages that are not served over HTTPS are not counted, $name."):
       install

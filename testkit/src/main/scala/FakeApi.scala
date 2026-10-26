@@ -138,11 +138,23 @@ private[testkit] final class FakePermissions
     .Promise
     .resolve(simulation.revoke(asked))
 
-/** A page's document, which holds only a body of text and a title. */
+/**
+  * A stand-in for a page's document, when the tests cannot load jsdom, which
+  * holds only a body of text and a title. Making anything of it fails.
+  */
 private[testkit] final class FakeDocument
   (text: String, val title: String)
   extends js.Object:
+
   val body: FakeBody = FakeBody(text)
+
+  def createElement(tag: String): js.Any = throw NoDom()
+
+  def createElementNS(namespace: String, tag: String): js.Any = throw NoDom()
+
+  def createTextNode(text: String): js.Any = throw NoDom()
+
+  def createComment(text: String): js.Any = throw NoDom()
 
 /** A page's body, whose `innerText` and `textContent` are the same. */
 private[testkit] final class FakeBody(initial: String) extends js.Object:

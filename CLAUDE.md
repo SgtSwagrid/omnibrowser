@@ -20,12 +20,22 @@ This is a Scala library for writing browser extensions against a typed model of 
 - `testkit` (Scala.js): `FakeBrowser`, an in-memory fake of the WebExtensions API (`FakeApi`, one per context, over shared `Simulation` state).
   `InProcess` runs an extension's code through the real `Launcher` and `WebExtensionBrowser`; `Built` runs the plugin's output in Node `vm` sandboxes.
   Actions settle by polling `Activity` until it has been idle for a moment.
-- `example`: an extension built with both, and tested with the testkit in both ways. The output is under `target/out/sjs1/scala-3.9.0/omnibrowser-example/omnibrowser/`.
+  Tabs and pages have jsdom documents (`Dom`) if the tests can load jsdom from `node_modules`, or else `FakeDocument` stand-ins.
+  In-process, every document belongs to one shared jsdom window, whose interfaces (`HTMLElement`, ...) and `window` are made globals of the test, and they take turns as the global `document`; built, each tab and page is a jsdom window of its own, which is its sandbox's scope.
+- `laminar` (`omnibrowser-laminar`, Scala.js): `LaminarPage` and `LaminarContentScript`, which render an element into the body, and extension methods on `ContentBrowser` connecting storage keys, `IO`s and fs2 streams to Airstream (`signal`, `writer`, `updater`, `events`, `observer`).
+  An fs2 stream runs through `browser.run` (so the testkit tracks it) while its event stream is started, and a `Deferred` interrupts it on stop.
+- `example`: an extension built with both, whose popup is Laminar's, and tested with the testkit in both ways. The output is under `target/out/sjs1/scala-3.9.0/omnibrowser-example/omnibrowser/`.
 - The plugin makes every test run build the extension first (through `Test / jsEnvInput`, as `test` is an input task in sbt 2), and tells the tests where it is through `OMNIBROWSER_BUILD`.
 
 - `launch.AndroidSupport` lists the permissions that Firefox for Android lacks, from MDN's browser-compat-data (`webextensions/manifest/permissions.json` and `optional_permissions.json`, where `firefox_android` is `false`). Update it from there as permissions are modelled.
 
 ### Gotchas
+
+- Many files are synced from `SgtSwagrid/scala-library-config` by GitHub Graph, which reverts a change made here: each that it has but `README.md` and `build.sbt`, such as `.gitignore`, `CONTRIBUTING.md`, `docs/STYLE_GUIDE.md`, `.github/**` (CI included), `project/IdeSettings.scala`, `project/build.properties` and `project/plugins-{common,library}.sbt`. Change them there.
+- The tests' jsdom comes from npm, through `package.json` and `package-lock.json`. CI's workflow is synced, so the build installs it: `Npm.npmInstall` runs `npm ci` before the tests of each project with `Npm.beforeTests`, unless `node_modules` is newer than the lockfile.
+  jsdom is pinned at 29.1.1, as jsdom 30 needs Node 22.22.2 or 24.15, newer than this machine's.
+- jsdom has no `innerText`, so `Dom` gives its elements one that is their `textContent`.
+- Laminar is at a milestone, 18.0.0-M5, the latest on GitHub when it was added.
 
 - The plugin's sources are also compiled into the build definition (`project/plugins-omnibrowser.sbt`), so the build can use its own plugin. A broken plugin breaks loading the build, and the plugin must compile with sbt's own Scala version (3.8.4).
 - The published plugin adds `omnibrowser-core` and `omnibrowser-testkit` at the version in its jar's manifest (`PluginVersion`). Compiled into this build's definition it has none, so it adds nothing, and the example depends on the projects directly.

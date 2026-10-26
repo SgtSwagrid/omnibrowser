@@ -7,6 +7,7 @@ import com.alecdorrington.omnibrowser.webext.{
   WebExtensionApi, WebExtensionBrowser,
 }
 import scala.scalajs.js
+import scala.util.Try
 
 /** How a [[FakeBrowser]] starts each part of an extension. */
 private[testkit] trait Runner:
@@ -38,31 +39,37 @@ private[testkit] trait Runner:
   /** Starts the extension's background in `context`. */
   def startBackground(context: FakeContext): Unit
 
-  /** Starts the content scripts at `indices` in `context`, on `document`. */
-  def startContentScripts
+  /**
+    * Opens a tab at `url` whose body holds `text`, into which the content
+    * scripts at `indices` are injected, in `context`, and gives its document.
+    */
+  def openTab
     (
+      url: String,
+      text: String,
       indices: Seq[Int],
-      context: FakeContext,
-      document: FakeDocument,
+      context: => FakeContext,
     )
-    : Unit
+    : js.Dynamic
 
-  /** Starts the extension's page of `kind` in `context`, on `document`. */
-  def startPage
+  /**
+    * Opens the extension's page of `kind` at `url`, if it has one, in
+    * `context`, and gives its document.
+    */
+  def openPage
     (
       kind: PageKind,
+      url: String,
       context: FakeContext,
-      document: FakeDocument,
     )
-    : Unit
+    : Option[js.Dynamic]
 
 /**
   * Runs an extension's code within the test itself, starting each program that
   * it runs with `launch`.
   *
   * Every part shares the test's global scope, so its pages' documents take
-  * turns as the global `document`, which is a stand-in with only a body of text
-  * unless the tests have a DOM of their own.
+  * turns as the global `document`, unless the tests have a DOM of their own.
   */
 private[testkit] final class InProcess
   (
@@ -99,27 +106,35 @@ private[testkit] final class InProcess
       api(context),
     )
 
-  override def startContentScripts
+  override def openTab
     (
+      url: String,
+      text: String,
       indices: Seq[Int],
-      context: FakeContext,
-      document: FakeDocument,
+      context: => FakeContext,
     )
-    : Unit =
-    show(document)
-    indices
-      .flatMap(extension.contentScripts().lift)
-      .foreach(launcher.contentScript(_, browser(context)))
+    : js.Dynamic =
+    val document = Dom.tab(url, text)
+    val scripts  = indices.flatMap(extension.contentScripts().lift)
+    if scripts.nonEmpty then
+      show(document)
+      val tab = browser(context)
+      scripts.foreach(launcher.contentScript(_, tab))
+    document
 
-  override def startPage
+  override def openPage
     (
       kind: PageKind,
+      url: String,
       context: FakeContext,
-      document: FakeDocument,
     )
-    : Unit =
-    show(document)
-    kind.of(extension).foreach(launcher.page(_, browser(context)))
+    : Option[js.Dynamic] = kind
+    .of(extension)
+    .map: page =>
+      val document = Dom.page(extension.name, page.body)
+      show(document)
+      launcher.page(page, browser(context))
+      document
 
   private def api(context: FakeContext): WebExtensionApi = context
     .api
@@ -129,11 +144,18 @@ private[testkit] final class InProcess
     WebExtensionBrowser(api(context), launch)
 
   /** Makes `document` the global document, unless the tests have a DOM. */
-  private def show(document: FakeDocument): Unit =
-    val global       = js.Dynamic.global.globalThis
-    val current: Any = global.document
-    if js.isUndefined(current) || current.isInstanceOf[FakeDocument] then
-      global.document = document
+  private def show(document: js.Dynamic): Unit = if !InProcess.hasOwnDom then
+    js.Dynamic.global.globalThis.document = document
+
+private[testkit] object InProcess:
+
+  /**
+    * Whether the tests have a DOM of their own, as they would in a browser,
+    * whose document is not to be replaced. Only the tests could have given the
+    * global `document` before it is first replaced.
+    */
+  private lazy val hasOwnDom: Boolean =
+    !js.isUndefined(js.Dynamic.global.globalThis.document)
 
 /**
   * Runs an extension as `sbt-omnibrowser` built it for `target`, in
@@ -169,51 +191,55 @@ private[testkit] final class Built
   override def hasPage(kind: PageKind): Boolean = page(kind).isDefined
 
   override def startBackground(context: FakeContext): Unit =
-    val files = backgroundScripts
-    if files.nonEmpty then
-      val sandbox = Sandbox(
-        directory,
-        context,
-        None,
-        target,
-        activity,
-      )
-      files.foreach(sandbox.load)
+    run(backgroundScripts, Frame.empty, context)
 
-  override def startContentScripts
+  override def openTab
     (
+      url: String,
+      text: String,
       indices: Seq[Int],
-      context: FakeContext,
-      document: FakeDocument,
+      context: => FakeContext,
     )
-    : Unit =
-    val sandbox = Sandbox(
-      directory,
-      context,
-      Some(document),
-      target,
-      activity,
-    )
-    indices
+    : js.Dynamic =
+    val frame = Dom.tabFrame(url, text)
+    val files = indices
       .flatMap(scripts.lift)
       .flatMap(script => strings(field(script, "js")))
-      .foreach(sandbox.load)
+    run(files, frame.scope, context)
+    frame.document
 
-  override def startPage
+  override def openPage
     (
       kind: PageKind,
+      url: String,
       context: FakeContext,
-      document: FakeDocument,
     )
-    : Unit = page(kind).foreach: page =>
+    : Option[js.Dynamic] = page(kind).map: page =>
+    val html  = read(page)
+    val frame = Dom.pageFrame(url, name, html)
+    run(
+      Built.scriptsOf(html),
+      frame.scope,
+      context,
+    )
+    frame.document
+
+  /** Runs the scripts `files`, if there are any, in `scope`, in `context`. */
+  private def run
+    (
+      files: Seq[String],
+      scope: js.Dynamic,
+      context: => FakeContext,
+    )
+    : Unit = if files.nonEmpty then
     val sandbox = Sandbox(
       directory,
       context,
-      Some(document),
+      scope,
       target,
       activity,
     )
-    Built.scriptsOf(read(page)).foreach(sandbox.load)
+    files.foreach(sandbox.load)
 
   private def scripts: Seq[js.Dynamic] = field(manifest, "content_scripts")
     .toSeq
@@ -256,44 +282,48 @@ private[testkit] object Built:
     .toSeq
 
 /**
-  * A sandbox, with a global scope of its own, in which one part of a built
-  * extension runs, seeing the API of `context` and, if it is a page, the
-  * `document`.
+  * A sandbox, whose global scope is `scope`, in which one part of a built
+  * extension runs, seeing the API of `context` and, if it is a page, its
+  * document.
   */
 private[testkit] final class Sandbox
   (
     directory: String,
     context: FakeContext,
-    document: Option[FakeDocument],
+    scope: js.Dynamic,
     target: Target,
     activity: Activity,
   ):
 
-  private val globals = Sandbox.shared ++ Seq(
+  private val globals = Sandbox.shared.filterNot((name, _) => has(name)) ++ Seq(
     "console"               -> SandboxConsole(activity),
     Sandbox.apiName(target) -> context.api,
-  ) ++ document.map("document" -> _)
+    // Chrome's background is a service worker, which loads the bundle itself.
+    "importScripts" ->
+      (((file: String) => load(file)): js.Function1[String, Unit]),
+  )
 
-  private val sandbox = Node
-    .vm
-    .createContext(js.Dictionary(globals*).asInstanceOf[js.Object])
+  globals.foreach((name, value) => scope.updateDynamic(name)(value))
 
-  // Chrome's background is a service worker, which loads the bundle itself.
-  sandbox.asInstanceOf[js.Dynamic].importScripts =
-    ((file: String) => load(file)): js.Function1[String, Unit]
+  /** Whether the scope already has the global `name`, as a window has most. */
+  private def has(name: String): Boolean =
+    !js.isUndefined(scope.selectDynamic(name))
 
   /** Runs the script `file` of the extension in the sandbox. */
   def load(file: String): Unit = Node
     .vm
     .runInContext(
       Node.fs.readFileSync(s"$directory/$file", "utf8"),
-      sandbox,
+      scope,
       js.Dynamic.literal(filename = file),
     )
 
 private[testkit] object Sandbox:
 
-  /** The globals of Node.js that every part of an extension may use. */
+  /**
+    * The globals of Node.js that every part of an extension may use, which a
+    * sandbox is given where its scope lacks them.
+    */
   private def shared: Seq[(String, js.Any)] = Seq(
     "setTimeout",
     "clearTimeout",
@@ -341,6 +371,16 @@ private[testkit] object Node:
     val value = js.Dynamic.global.process.env.selectDynamic(name)
     Option.unless(js.isUndefined(value))(value.asInstanceOf[String])
 
+  /**
+    * The package `name`, if the tests can load it, as from the `node_modules`
+    * of the directory in which they run, or of one above it.
+    */
+  def load(name: String): Option[js.Dynamic] = Try(
+    builtin[js.Dynamic]("node:module").createRequire(
+      s"${ js.Dynamic.global.process.cwd() }/",
+    )(name),
+  ).toOption
+
   private def builtin[A](name: String): A = js
     .Dynamic
     .global
@@ -351,12 +391,12 @@ private[testkit] object Node:
 @js.native
 private[testkit] trait Vm extends js.Object:
 
-  def createContext(globals: js.Object): js.Object = js.native
+  def createContext(globals: js.Object): js.Dynamic = js.native
 
   def runInContext
     (
       code: String,
-      context: js.Object,
+      context: js.Any,
       options: js.Object,
     )
     : js.Any = js.native

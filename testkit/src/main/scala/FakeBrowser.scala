@@ -34,7 +34,7 @@ final class FakeBrowser private (
     */
   def visit(url: String, text: String = ""): IO[FakePage] = act(
     simulation.openTab(url, text),
-  ).map((tab, document) => FakePage(document, Some(TabId(tab.id))))
+  ).map((tab, document) => FakePage(document, Some(TabId(tab.id)), settle))
 
   /** Opens the extension's popup. */
   def openPopup: IO[FakePage] = openPage(PageKind.Popup)
@@ -103,9 +103,10 @@ final class FakeBrowser private (
   /** This browser, once the extension is installed into it. */
   private def installed: IO[FakeBrowser] = act(simulation.install()).as(this)
 
-  private def openPage(kind: PageKind): IO[FakePage] = act(
-    simulation.openPage(kind),
-  ).flatMap(IO.fromOption(_)(NoSuchPage(kind.id))).map(FakePage(_, None))
+  private def openPage(kind: PageKind): IO[FakePage] =
+    act(simulation.openPage(kind))
+      .flatMap(IO.fromOption(_)(NoSuchPage(kind.id)))
+      .map(FakePage(_, None, settle))
 
   private def act[A](action: => A): IO[A] = IO(action) <* settle
 
@@ -184,18 +185,79 @@ object FakeBrowser:
     )
     browser.installed
 
-/** A page open in a [[FakeBrowser]]: a tab's, or one of the extension's own. */
+/**
+  * A page open in a [[FakeBrowser]]: a tab's, or one of the extension's own.
+  *
+  * Its document is jsdom's, if the tests can load it, as from their
+  * `node_modules`, and the test may then act on its elements as the user would.
+  * Each such action waits until the extension has finished responding to it,
+  * and fails if the extension failed meanwhile. Otherwise, it is a stand-in
+  * with only a body of text.
+  */
 final class FakePage private[testkit] (
-  document: FakeDocument,
+  document: js.Dynamic,
   val tab: Option[TabId],
+  settle: IO[Unit],
 ):
 
   /** The text of the page's body. */
-  def text: IO[String] = IO(document.body.textContent)
+  def text: IO[String] = IO(document.body.textContent.asInstanceOf[String])
+
+  /** The text of the first element that the CSS `selector` matches. */
+  def text(selector: String): IO[String] =
+    element(selector).map(_.textContent.asInstanceOf[String])
+
+  /** The value of the first field that `selector` matches. */
+  def value(selector: String): IO[String] =
+    element(selector).map(_.value.asInstanceOf[String])
+
+  /**
+    * Whether the first checkbox or radio button that `selector` matches is
+    * checked.
+    */
+  def isChecked(selector: String): IO[Boolean] =
+    element(selector).map(_.checked.asInstanceOf[Boolean])
+
+  /** Clicks the first element that `selector` matches. */
+  def click(selector: String): IO[Unit] = act(selector)(_.click())
+
+  /**
+    * Types `text` into the first field that `selector` matches, in place of its
+    * value, and then leaves the field.
+    */
+  def enter(selector: String, text: String): IO[Unit] = act(selector): field =>
+    field.value = text
+    fire(field, "input")
+    fire(field, "change")
+
+  private def act(selector: String)(action: js.Dynamic => Unit): IO[Unit] =
+    element(selector).flatMap(element => IO(action(element))) >> settle
+
+  /** The first element that `selector` matches. */
+  private def element(selector: String): IO[js.Dynamic] = (document: Any) match
+    case _: FakeDocument => IO.raiseError(NoDom())
+    case _ => IO(document.querySelector(selector)).flatMap: found =>
+        IO.raiseWhen(found == null)(NoSuchElement(selector)).as(found)
+
+  /** Fires the event `name` at `element`, as the browser would. */
+  private def fire(element: js.Dynamic, name: String): Unit =
+    val event = document.createEvent("Event")
+    event.initEvent(name, true, true)
+    element.dispatchEvent(event)
 
 /** The extension has no page of the kind asked for. */
 final case class NoSuchPage(kind: String)
   extends Exception(s"The extension has no $kind page.")
+
+/** No element of the page matches the CSS selector `selector`. */
+final case class NoSuchElement(selector: String)
+  extends Exception(s"No element of the page matches $selector.")
+
+/** The page has no DOM, as the tests could not load jsdom. */
+final case class NoDom()
+  extends Exception(
+    "The page has no DOM, as the tests could not load jsdom. Install it with `npm install --save-dev jsdom`.",
+  )
 
 /** The extension was still busy when the test gave up waiting for it. */
 final case class Unsettled()

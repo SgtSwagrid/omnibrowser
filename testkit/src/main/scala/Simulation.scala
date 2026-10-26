@@ -1,7 +1,7 @@
 package com.alecdorrington.omnibrowser.testkit
 
 import com.alecdorrington.omnibrowser.Target
-import com.alecdorrington.omnibrowser.launch.{Json, PageKind}
+import com.alecdorrington.omnibrowser.launch.{Json, Layout, PageKind}
 import scala.collection.mutable
 import scala.scalajs.js
 import scala.scalajs.js.JSConverters.*
@@ -97,21 +97,33 @@ private[testkit] final class Simulation(runner: Runner, activity: Activity):
     val tab = tabObject(activeTab.getOrElse(openTab("about:blank", "")._1))
     background.foreach(_.api.action.foreach(_.onClicked.fire(tab)))
 
-  /** Opens a tab at `url` showing `text`, and injects the content scripts. */
-  def openTab(url: String, text: String): (FakeTab, FakeDocument) =
-    val tab      = FakeTab(tabs.size + 1, url)
-    val document = FakeDocument(text, url)
+  /**
+    * Opens a tab at `url` showing `text`, into which the content scripts that
+    * match it are injected, and gives the tab and its document.
+    */
+  def openTab(url: String, text: String): (FakeTab, js.Dynamic) =
+    val tab = FakeTab(tabs.size + 1, url)
     tabs :+= tab
     active = Some(tab.id)
-    inject(tab, document)
+    val document = runner.openTab(
+      url,
+      text,
+      scriptsFor(url),
+      context(Kind.Content(tab.id)),
+    )
     (tab, document)
 
-  /** Opens the extension's page of `kind`, if it has one. */
-  def openPage(kind: PageKind): Option[FakeDocument] = Option
-    .when(runner.hasPage(kind))(FakeDocument("", runner.name))
-    .map: document =>
-      runner.startPage(kind, context(Kind.Page), document)
-      document
+  /**
+    * Opens the extension's page of `kind`, if it has one, and gives its
+    * document.
+    */
+  def openPage(kind: PageKind): Option[js.Dynamic] = Option
+    .when(runner.hasPage(kind))(context(Kind.Page))
+    .flatMap(runner.openPage(
+      kind,
+      s"$origin/${ Layout.page(kind) }",
+      _,
+    ))
 
   /**
     * Delivers `message` from `sender` to each of the extension's own contexts,
@@ -260,19 +272,13 @@ private[testkit] final class Simulation(runner: Runner, activity: Activity):
 
   private def isActive(tab: FakeTab): Boolean = active.contains(tab.id)
 
-  private def inject(tab: FakeTab, document: FakeDocument): Unit =
-    val scripts = runner
-      .contentScripts
-      .zipWithIndex
-      .collect:
-        case (patterns, index)
-          if patterns.exists(MatchPattern.matches(_, tab.url)) => index
-    if scripts.nonEmpty then
-      runner.startContentScripts(
-        scripts,
-        context(Kind.Content(tab.id)),
-        document,
-      )
+  /** The indices of the content scripts that match `url`. */
+  private def scriptsFor(url: String): Seq[Int] = runner
+    .contentScripts
+    .zipWithIndex
+    .collect:
+      case (patterns, index) if patterns.exists(MatchPattern.matches(_, url)) =>
+        index
 
   private def receivers(sender: FakeContext): Seq[FakeContext] = extension
     .filter(_ != sender)
