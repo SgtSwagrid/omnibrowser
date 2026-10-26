@@ -62,6 +62,10 @@ browser.grants.request[Permission.Tabs].flatMap:
   case None          => ... // The user refused.
 ```
 
+A handler that needs to know who made a request takes its sender too, as in `serve(endpoint)((request, sender, browser) => ...)`, where `sender.tab` is the tab of the content script that asked, if one did.
+
+Firefox for Android may install the extension unless it declares `android = Android.Unsupported`, and `Android.Supported(Some("120.0"))` sets the earliest version. The build warns of each permission that the extension asks for and Firefox for Android lacks.
+
 The browser asks the user only in response to their input, so a page's DOM event handler starts such a program with `browser.run(program)`, which runs it at once.
 
 Messages and stored values hold JSON, through a `Codec`: there are codecs of the usual types, and `derives Codec` makes one of a case class, enum or sealed trait.

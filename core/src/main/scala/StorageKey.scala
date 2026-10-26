@@ -6,7 +6,10 @@ enum StorageArea(private[omnibrowser] val id: String):
   /** On this device, until the extension is removed. */
   case Local extends StorageArea("local")
 
-  /** On every device to which the user signs in, in small amounts. */
+  /**
+    * On every device to which the user signs in, in small amounts. Firefox for
+    * Android keeps the values on its own device only.
+    */
   case Sync extends StorageArea("sync")
 
   /**

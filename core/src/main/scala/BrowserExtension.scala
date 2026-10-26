@@ -43,6 +43,12 @@ abstract class BrowserExtension[P : Permissions as P]:
     */
   def dataCollection: DataCollection = DataCollection.none
 
+  /**
+    * Whether Firefox for Android may install the extension. If so, its build
+    * warns of each permission it asks for that Firefox for Android lacks.
+    */
+  def android: Android = Android.Supported()
+
   /** The manifest names of the extension's permissions. */
   final def permissions: Set[String] = P.names
 
@@ -89,4 +95,16 @@ abstract class BrowserExtension[P : Permissions as P]:
   protected final def serve[Req, Res]
     (endpoint: Endpoint[Req, Res])
     (run: (Req, Browser) => IO[Res])
+    : Handler = Handler.Serve(
+    endpoint,
+    (request, _, browser) => run(request, browser),
+  )
+
+  /**
+    * Answers the requests that the extension's other parts make of `endpoint`,
+    * knowing who made each, such as the tab of a content script.
+    */
+  protected final def serve[Req, Res]
+    (endpoint: Endpoint[Req, Res])
+    (run: (Req, Sender, Browser) => IO[Res])
     : Handler = Handler.Serve(endpoint, run)

@@ -76,7 +76,7 @@ object Browser:
   /** The browser's tabs. */
   trait Tabs:
 
-    /** Every open tab. */
+    /** Every open tab, of which Firefox for Android may give only some. */
     def all: IO[List[Tab]]
 
     /** The active tab of the current window, if there is one. */
@@ -115,7 +115,8 @@ object Browser:
       * Asks the user for the permissions `Q`, and gives evidence of them if the
       * user grants them, as the APIs that they cover require. The browser asks
       * only in response to the user's input, so this must run from the handler
-      * of it, through [[ContentBrowser.run]].
+      * of it, through [[ContentBrowser.run]]. Firefox for Android has it from
+      * version 120.
       */
     def request[Q : Permissions]: IO[Option[Granted[Q]]]
 

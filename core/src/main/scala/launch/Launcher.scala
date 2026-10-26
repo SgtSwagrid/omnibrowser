@@ -70,7 +70,7 @@ private[omnibrowser] final class Launcher(val launch: IO[Unit] => Unit):
       serve: Handler.Serve[Req, Res],
       browser: => Browser,
     )
-    : MessageListener = (message, _, respond) =>
+    : MessageListener = (message, sender, respond) =>
     val mine = Messages.endpoint(message).contains(serve.endpoint.name)
     if mine then
       launch(
@@ -78,6 +78,7 @@ private[omnibrowser] final class Launcher(val launch: IO[Unit] => Unit):
           serve,
           browser,
           Messages.payload(message),
+          Messages.sender(sender),
         ).map(respond(_)),
       )
     mine
@@ -87,6 +88,7 @@ private[omnibrowser] final class Launcher(val launch: IO[Unit] => Unit):
       serve: Handler.Serve[Req, Res],
       browser: Browser,
       request: js.Any,
+      sender: Sender,
     )
     : IO[js.Any] = IO
     .fromEither(
@@ -96,7 +98,7 @@ private[omnibrowser] final class Launcher(val launch: IO[Unit] => Unit):
         .decode(request)
         .leftMap(MessagingError(serve.endpoint.name, _)),
     )
-    .flatMap(serve.run(_, browser))
+    .flatMap(serve.run(_, sender, browser))
     .map(response => Messages.success(serve.endpoint.response.encode(response)))
     .handleError(error => Messages.failure(error.getMessage))
 

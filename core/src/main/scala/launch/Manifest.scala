@@ -1,7 +1,7 @@
 package com.alecdorrington.omnibrowser.launch
 
 import com.alecdorrington.omnibrowser.{
-  BrowserExtension, ContentScript, DataCollection, Target,
+  Android, BrowserExtension, ContentScript, DataCollection, Target,
 }
 import scala.scalajs.js
 
@@ -54,10 +54,7 @@ private[omnibrowser] object Manifest:
     ),
     entryIf(build.target == Target.Firefox)(
       "browser_specific_settings",
-      gecko(
-        build.geckoId,
-        extension.dataCollection,
-      ),
+      firefox(build.geckoId, extension),
     ),
   )
 
@@ -144,20 +141,35 @@ private[omnibrowser] object Manifest:
   )
 
   /**
-    * What Firefox alone needs: the extension's ID, and the data that it
-    * collects, which Firefox shows the user on installing it.
+    * What Firefox alone needs: the extension's ID, the data that it collects,
+    * which Firefox shows the user on installing it, and whether Firefox for
+    * Android may install it.
     */
-  private def gecko(id: String, collection: DataCollection): js.Object =
-    entries(entry(
+  private def firefox
+    (
+      id: String,
+      extension: BrowserExtension[?],
+    )
+    : js.Object = entries(
+    entry(
       "gecko",
       entries(
         entry("id", id),
         entry(
           "data_collection_permissions",
-          dataCollection(collection),
+          dataCollection(extension.dataCollection),
         ),
       ),
-    ))
+    ),
+    android(extension.android).map("gecko_android" -> _),
+  )
+
+  /** What Firefox's add-on store reads to let Firefox for Android install it. */
+  private def android(support: Android): Option[js.Object] = support match
+    case Android.Supported(minimum) => Some(entries(
+        minimum.map(version => "strict_min_version" -> (version: js.Any)),
+      ))
+    case Android.Unsupported => None
 
   private def dataCollection(collection: DataCollection): js.Object = entries(
     entry(

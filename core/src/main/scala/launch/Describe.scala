@@ -11,6 +11,8 @@ private[omnibrowser] object Describe:
 
   private val key = "__omnibrowserFiles"
 
+  private val warningsKey = "__omnibrowserWarnings"
+
   /** Gives the files describing `extension` to the build that ran the bundle. */
   def publish
     (
@@ -18,13 +20,22 @@ private[omnibrowser] object Describe:
       bootstrap: Bootstrap,
       build: Build,
     )
-    : Unit = js
-    .Dynamic
-    .global
-    .globalThis
-    .updateDynamic(key)(js.Dictionary(
+    : Unit =
+    val global = js.Dynamic.global.globalThis
+    global.updateDynamic(key)(js.Dictionary(
       files(extension, bootstrap.extension, build).toSeq*,
     ))
+    global.updateDynamic(warningsKey)(js.Array(warnings(extension, build)*))
+
+  /** Warnings of what the build for `build`'s target cannot do as asked. */
+  def warnings
+    (
+      extension: BrowserExtension[?],
+      build: Build,
+    )
+    : Seq[String] = build.target match
+    case Target.Firefox => AndroidSupport.warnings(extension)
+    case Target.Chrome  => Seq.empty
 
   /**
     * The files, by path, that make the bundle of `extension`, the object named
