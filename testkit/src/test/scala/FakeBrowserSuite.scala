@@ -113,7 +113,7 @@ object Probe extends BrowserExtension[Storage]:
   /** A value that content scripts may not see. */
   val secret = StorageKey.session[String]("secret", "")
 
-  override val background = Background(
+  override def background() = Background(
     onInstalled((_, browser) => browser.storage.update(installs)(_ + 1).void),
     serve(echo)((text, _) => IO.pure(text.reverse)),
     serve(fail)((_, _) =>
@@ -121,7 +121,7 @@ object Probe extends BrowserExtension[Storage]:
     ),
   )
 
-  override val contentScripts = Seq(
+  override def contentScripts() = Seq(
     ContentScript("https://*.example.com/*")(browser =>
       IO(document.body.innerText)
         .flatMap(text => browser.storage.update(seen)(text :: _))
@@ -130,7 +130,7 @@ object Probe extends BrowserExtension[Storage]:
     ContentScript("https://secret.test/*")(_.storage.get(secret).void),
   )
 
-  override val popup = Some(Page(browser =>
+  override def popup() = Some(Page(browser =>
     browser
       .storage
       .values(seen)
@@ -144,7 +144,7 @@ object Clicker extends BrowserExtension[Tabs]:
 
   override val name = "Clicker"
 
-  override val background = Background(onActionClicked((tab, browser) =>
+  override def background() = Background(onActionClicked((tab, browser) =>
     browser.action.setBadge(tab.url.getOrElse("unknown")),
   ))
 
@@ -153,6 +153,6 @@ object Blind extends BrowserExtension[Any]:
 
   override val name = "Blind"
 
-  override val background = Background(onActionClicked((tab, browser) =>
+  override def background() = Background(onActionClicked((tab, browser) =>
     browser.action.setBadge(tab.url.getOrElse("unknown")),
   ))

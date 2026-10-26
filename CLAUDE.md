@@ -13,9 +13,10 @@ Keep it concise and actionable.
 
 This is a Scala library for writing browser extensions against a typed model of the browser.
 
-- `core` (Scala.js): the model (`BrowserExtension`, contexts, `Browser`, `Endpoint`, `StorageKey`, `Codec`, type-level `Permission`s), its implementation over the WebExtensions API (`webext`), and the bundle's entry point (`launch`).
-- `sbt-omnibrowser` (JVM, sbt 2 plugin): links one classic-script bundle shared by every context, then runs it under Node to have it write its own `manifest.json`, bootstraps and HTML for each target (`launch.Describe`).
-  Each context loads a small bootstrap, naming its role, before the bundle.
+- `core` (Scala.js): the model (`BrowserExtension`, contexts, `Browser`, `Endpoint`, `StorageKey`, `Codec`, type-level `Permission`s), its implementation over the WebExtensions API (`webext`), and the bundles' entry points (`launch`).
+- `sbt-omnibrowser` (JVM, sbt 2 plugin): links two classic-script bundles from the same code, then runs the main one under Node to have it write its own `manifest.json`, bootstraps and HTML for each target (`launch.Describe`).
+  The main bundle (`omnibrowser.js`, from `launch.Entry`) runs the background and pages; the content scripts' own (`omnibrowser-content.js`, from `launch.ContentEntry`, linked by `linkContent`) holds only what they reach, and is dropped if there are none.
+  Each context loads a small bootstrap, naming its role, before its bundle.
 - `testkit` (Scala.js): `FakeBrowser`, an in-memory fake of the WebExtensions API (`FakeApi`, one per context, over shared `Simulation` state).
   `InProcess` runs an extension's code through the real `Launcher` and `WebExtensionBrowser`; `Built` runs the plugin's output in Node `vm` sandboxes.
   Actions settle by polling `Activity` until it has been idle for a moment.
@@ -29,6 +30,7 @@ This is a Scala library for writing browser extensions against a typed model of 
 - The plugin's sources are also compiled into the build definition (`project/plugins-omnibrowser.sbt`), so the build can use its own plugin. A broken plugin breaks loading the build, and the plugin must compile with sbt's own Scala version (3.8.4).
 - The published plugin adds `omnibrowser-core` and `omnibrowser-testkit` at the version in its jar's manifest (`PluginVersion`). Compiled into this build's definition it has none, so it adds nothing, and the example depends on the projects directly.
 - In sbt 2, a task returning `File` must have its key marked `@transient`, or be wrapped in `Def.uncached`.
+- An extension's parts are methods (`def background()`, `contentScripts()`, `popup()`, `options()`) so that the content bundle reaches only `contentScripts()` and the object's own vals. Never make them vals (Scala 3 rejects a `val` overriding them anyway), and keep `launch.Bootstrap.startContent` from reaching the other parts.
 - A `/*` in a comment, as in a match pattern like `https://*/*`, opens a nested comment in Scala.
 - On this Windows machine, `sbt` cannot start its server (the space in the Java path). Run it in-process instead: `java -jar "C:/Program Files (x86)/sbt/bin/sbt-launch.jar" <commands>`.
   The machine is often short of memory: an `OutOfMemoryError`, a `hs_err_pid*.log`, or Node exiting with `-1073740791` means retrying later or with a smaller `-Xmx`, not a bug. Delete any `hs_err_pid*.log` and `replay_pid*.log` left behind.

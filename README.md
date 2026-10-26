@@ -16,7 +16,7 @@
 Add the plugin, which builds the extension, to `project/plugins.sbt`:
 
 ```scala
-addSbtPlugin("com.alecdorrington" % "sbt-omnibrowser" % "0.1.0")
+addSbtPlugin("com.alecdorrington" % "sbt-omnibrowser" % "0.3.0")
 ```
 
 Then enable it in your `build.sbt`:
@@ -39,18 +39,21 @@ object WordCount extends BrowserExtension[Permission.Storage]:
   val count = Endpoint[String, Int]("count")
   val total = StorageKey.local[Int]("total", 0)
 
-  override val background = Background(
+  override def background() = Background(
     serve(count): (text, browser) =>
       val words = text.split("\\s+").count(_.nonEmpty)
       browser.storage.update(total)(_ + words).as(words),
   )
 
-  override val contentScripts = Seq(
+  override def contentScripts() = Seq(
     ContentScript("https://*/*")(browser =>
       browser.runtime.call(count)(document.body.innerText).void,
     ),
   )
 ```
+
+Each part of an extension, `background()`, `contentScripts()`, `popup()` and `options()`, is a method, so that each is built only where it runs.
+The content scripts load a bundle of their own, which holds only what `contentScripts()` and the object's own values reach: keep anything that only the background or a page needs within its method, or in an object of its own, rather than in a value of the extension object.
 
 A content script's stylesheets come with it, as in `ContentScript(...)(...).withCss("content.css")`, and a page may begin with a body and stylesheets of its own, as in `Page(...).withBody("<main></main>").withStylesheets("popup.css")`, each a path among the assets in `src/main/extension`.
 

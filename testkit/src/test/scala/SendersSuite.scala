@@ -34,7 +34,7 @@ object Flagger extends BrowserExtension[Any]:
   /** Gives the URL of the sender's tab, if it has one. */
   val where = Endpoint[Unit, String]("where")
 
-  override val background = Background(
+  override def background() = Background(
     serve(flag)((_, sender, browser) =>
       sender.tab.fold(IO.unit)(tab => browser.action.setBadge("!", tab.id)),
     ),
@@ -43,5 +43,5 @@ object Flagger extends BrowserExtension[Any]:
     ),
   )
 
-  override val contentScripts =
+  override def contentScripts() =
     Seq(ContentScript("https://*/flag")(_.runtime.call(flag)(())))

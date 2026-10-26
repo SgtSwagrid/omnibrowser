@@ -91,7 +91,7 @@ object Asker extends BrowserExtension[Any]:
 
   val note = StorageKey.local[String]("note", "")
 
-  override val background = Background(
+  override def background() = Background(
     serve(ask)((_, browser) => browser.grants.request[Tabs].map(_.isDefined)),
     serve(remember)((text, browser) =>
       browser
@@ -108,7 +108,7 @@ object Asker extends BrowserExtension[Any]:
     ),
   )
 
-  override val popup =
+  override def popup() =
     Some(Page(browser => IO(browser.run(browser.action.setBadge("ran")))))
 
 /** Marks the tab in which its toolbar button is clicked. */
@@ -116,6 +116,6 @@ object Marker extends BrowserExtension[Any]:
 
   override val name = "Marker"
 
-  override val background = Background(
+  override def background() = Background(
     onActionClicked((tab, browser) => browser.action.setBadge("here", tab.id)),
   )

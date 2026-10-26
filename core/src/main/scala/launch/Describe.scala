@@ -59,7 +59,7 @@ private[omnibrowser] object Describe:
       target: Target,
     )
     : Map[String, String] =
-    Map.from(Option.when(extension.background.handlers.nonEmpty)(
+    Map.from(Option.when(extension.background().handlers.nonEmpty)(
       Layout.background -> backgroundScript(name, target),
     ))
 
@@ -81,7 +81,7 @@ private[omnibrowser] object Describe:
       name: String,
     )
     : Map[String, String] = extension
-    .contentScripts
+    .contentScripts()
     .indices
     .map(index =>
       Layout.contentScript(index) ->

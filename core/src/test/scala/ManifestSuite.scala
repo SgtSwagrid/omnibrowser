@@ -175,7 +175,10 @@ class ManifestSuite extends FunSuite:
     assertEquals(scripts.length, 1)
     assertEquals(
       strings(scripts(0).js),
-      List("content-1.js", "omnibrowser.js"),
+      List(
+        "content-1.js",
+        "omnibrowser-content.js",
+      ),
     )
     assertEquals(
       strings(scripts(0).matches),
@@ -229,15 +232,15 @@ object Sample extends BrowserExtension[Storage]:
 
   override val name = "Sample & Co"
 
-  override val background = Background(onStartup(_ => IO.unit))
+  override def background() = Background(onStartup(_ => IO.unit))
 
-  override val contentScripts = Seq(
+  override def contentScripts() = Seq(
     ContentScript("https://*/*")(_ => IO.unit)
       .at(RunAt.Start)
       .withCss("content.css"),
   )
 
-  override val popup = Some(
+  override def popup() = Some(
     Page(_ => IO.unit)
       .withBody("""<main id="app"></main>""")
       .withStylesheets("popup.css"),

@@ -43,12 +43,12 @@ private[omnibrowser] object Manifest:
       strings(extension.optionalHosts),
     ),
     entry("action", action(extension)),
-    entryIf(extension.options.isDefined)("options_ui", optionsUi),
-    entryIf(extension.background.handlers.nonEmpty)(
+    entryIf(extension.options().isDefined)("options_ui", optionsUi),
+    entryIf(extension.background().handlers.nonEmpty)(
       "background",
       background(build.target),
     ),
-    entryIf(extension.contentScripts.nonEmpty)(
+    entryIf(extension.contentScripts().nonEmpty)(
       "content_scripts",
       contentScripts(extension),
     ),
@@ -90,7 +90,7 @@ private[omnibrowser] object Manifest:
     Target.Chrome && numericVersion(build.version) != build.version
 
   private def action(extension: BrowserExtension[?]): js.Object = entries(
-    entryIf(extension.popup.isDefined)(
+    entryIf(extension.popup().isDefined)(
       "default_popup",
       Layout.page(PageKind.Popup),
     ),
@@ -116,7 +116,7 @@ private[omnibrowser] object Manifest:
   private def contentScripts
     (extension: BrowserExtension[?])
     : js.Array[js.Object] =
-    js.Array(extension.contentScripts.zipWithIndex.map(contentScript)*)
+    js.Array(extension.contentScripts().zipWithIndex.map(contentScript)*)
 
   private def contentScript(script: ContentScript, index: Int): js.Object =
     entries(
@@ -125,7 +125,7 @@ private[omnibrowser] object Manifest:
         "js",
         strings(Seq(
           Layout.contentScript(index),
-          Layout.bundle,
+          Layout.contentBundle,
         )),
       ),
       entry("run_at", script.runAt.id),

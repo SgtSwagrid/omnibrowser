@@ -22,6 +22,8 @@ lazy val `omnibrowser-core` = project
   .enablePlugins(ScalaJSPlugin)
   .settings(
     packagePrefix := projectRoot,
+    // Its entry points start the bundles of an extension, not a program.
+    Compile / mainClass := None,
     Dependencies.catsEffect,
     Dependencies.scalajsDom,
     Dependencies.munit,

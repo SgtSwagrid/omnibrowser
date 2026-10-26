@@ -28,8 +28,8 @@ private[omnibrowser] enum PageKind(val id: String):
 
   /** The page of this kind in `extension`, if it has one. */
   def of(extension: BrowserExtension[?]): Option[Page] = this match
-    case Popup   => extension.popup
-    case Options => extension.options
+    case Popup   => extension.popup()
+    case Options => extension.options()
 
 /** The target and version of a build of an extension. */
 private[omnibrowser] final case class Build
@@ -59,21 +59,36 @@ private[omnibrowser] object Bootstrap:
   def script(bootstrap: Bootstrap): String =
     s"globalThis.$key = ${ Json.stringify(fields(bootstrap)) };\n"
 
-  /** Starts the part of the extension that `bootstrap` names. */
-  def start(bootstrap: Bootstrap): Unit =
+  /**
+    * Starts the background or page that `bootstrap` names, or describes the
+    * extension to the build. The content scripts' own bundle starts them.
+    */
+  def startExtension(bootstrap: Bootstrap): Unit =
     val extension    = load(bootstrap.extension)
     lazy val api     = WebExtensionApi.current
     lazy val browser = WebExtensionBrowser(api, Launcher.default.launch)
     bootstrap.role match
       case Role.Background =>
         Launcher.default.background(extension, browser, api)
-      case Role.ContentScript(index) => extension
-          .contentScripts
-          .lift(index)
-          .foreach(Launcher.default.contentScript(_, browser))
       case Role.Page(kind) =>
         kind.of(extension).foreach(Launcher.default.page(_, browser))
       case Role.Describe(build) => Describe.publish(extension, bootstrap, build)
+      case Role.ContentScript(_) => ()
+
+  /**
+    * Starts the content script that `bootstrap` names. This alone of the
+    * extension's code reaches the content scripts, so that their bundle holds
+    * nothing that only another part needs.
+    */
+  def startContent(bootstrap: Bootstrap): Unit = bootstrap.role match
+    case Role.ContentScript(index) =>
+      lazy val api     = WebExtensionApi.current
+      lazy val browser = WebExtensionBrowser(api, Launcher.default.launch)
+      load(bootstrap.extension)
+        .contentScripts()
+        .lift(index)
+        .foreach(Launcher.default.contentScript(_, browser))
+    case _ => ()
 
   private def load(name: String): BrowserExtension[?] = Reflect
     .lookupLoadableModuleClass(s"$name$$")

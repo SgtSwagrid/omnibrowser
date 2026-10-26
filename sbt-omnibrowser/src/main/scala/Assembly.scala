@@ -18,12 +18,12 @@ final case class Assembly
 
   /**
     * Lays out the extension in `directory`, replacing whatever was there, from
-    * the bundle linked into `linked` and the assets in `assets`.
+    * the bundles linked into `linked` and the assets in `assets`.
     */
   def into
     (
       directory: File,
-      linked: File,
+      linked: Seq[File],
       assets: File,
       runner: File,
       log: Logger,
@@ -31,13 +31,15 @@ final case class Assembly
     : File =
     IO.delete(directory)
     if assets.isDirectory then IO.copyDirectory(assets, directory)
-    IO.copy(bundle(linked).map(file => file -> directory / file.getName))
+    IO.copy(
+      linked.flatMap(bundles).map(file => file -> directory / file.getName),
+    )
     describe(directory, runner, log)
     directory
 
-  /** The bundle, and its source map. */
-  private def bundle(linked: File): Seq[File] =
-    (linked * s"${ Assembly.bundle }*").get()
+  /** The bundles linked into `linked`, and their source maps. */
+  private def bundles(linked: File): Seq[File] = (linked * "omnibrowser*.js*")
+    .get()
 
   /**
     * Has the bundle describe the extension, through `runner`, which writes the
@@ -69,8 +71,11 @@ final case class Assembly
 
 object Assembly:
 
-  /** The name of the linked bundle, which every part of an extension loads. */
+  /** The name of the main bundle, which the background and pages load. */
   val bundle = "omnibrowser.js"
+
+  /** The name of the bundle that the content scripts load, of their code alone. */
+  val contentBundle = "omnibrowser-content.js"
 
   /** Deletes the zips in `directory`, such as those of earlier versions. */
   def clearZips(directory: File): Unit = IO.delete((directory * "*.zip").get())
@@ -113,6 +118,9 @@ private[plugin] object Runner:
       |}
       |
       |const manifest = JSON.parse(fs.readFileSync(path.join(directory, "manifest.json"), "utf8"));
+      |if ((manifest.content_scripts ?? []).length === 0)
+      |  for (const name of ["omnibrowser-content.js", "omnibrowser-content.js.map"])
+      |    fs.rmSync(path.join(directory, name), { force: true });
       |const pages = Object.keys(files).filter((name) => name.endsWith(".html"));
       |const missing = [...named(manifest), ...pages.flatMap((page) => linked(files[page]))]
       |  .filter((name) => !fs.existsSync(path.join(directory, name)));
