@@ -22,9 +22,7 @@ class LaminarSuite extends CatsEffectSuite:
       assertEquals(before, "0 clicks")
       assertEquals(after, "5 clicks")
 
-  test(
-    "An updater transforms a stored value with each event that it observes.",
-  ):
+  test("An updater transforms a stored value with each event, whatever it is."):
     for
       browser <- FakeBrowser.install(Tally)
       popup   <- browser.openPopup
@@ -63,7 +61,7 @@ class LaminarSuite extends CatsEffectSuite:
       assertEquals(note, "Remember the milk.")
       assertEquals(synced, "Forget the milk.")
 
-  test("A reducer transforms a stored value by each event that it observes."):
+  test("An updater transforms a stored value by what each event carries."):
     for
       browser <- FakeBrowser.install(Tally)
       options <- browser.openOptions
@@ -145,7 +143,7 @@ object Tally extends BrowserExtension[Storage]:
       ),
       button(
         cls := "add",
-        onClick --> browser.updater(clicks)(_ + 1),
+        onClick --> browser.updater(clicks)((count, _) => count + 1),
       ),
       p(
         cls := "doubled",
@@ -171,7 +169,7 @@ object Tally extends BrowserExtension[Storage]:
       input(
         cls := "tag",
         onChange.mapToValue -->
-          browser.reducer(tags)((all, tag: String) => tag :: all),
+          browser.updater(tags)((all, tag: String) => tag :: all),
       ),
     ),
   ))
