@@ -105,6 +105,12 @@ object OmnibrowserPlugin extends AutoPlugin:
     Compile / scalaJSLinkerConfig ~=
       (_.withOutputPatterns(OutputPatterns.fromJSFile(Assembly.bundle))),
 
+    // A release is linked without a source map, which only developers use, and
+    // which names the sources by their paths on the machine that built it, so
+    // that the same source built elsewhere would differ: stores such as Firefox
+    // Add-ons rebuild each version from its source to compare.
+    Compile / fullLinkJS / scalaJSLinkerConfig ~= (_.withSourceMap(false)),
+
     // Every browser that runs Manifest V3 runs ES2021, which Scala.js needs
     // for the whole of java.util.regex, such as Unicode classes like \p{L}.
     Compile / scalaJSLinkerConfig ~=
