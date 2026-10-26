@@ -103,7 +103,8 @@ override def popup() = Some(LaminarPage(browser =>
 `LaminarPage(...)` renders its element at the end of the page's body, and `LaminarContentScript("https://*/*")(...)` at the end of the body of each page that it matches.
 The browser connects Laminar to the extension:
 
-- `browser.signal(key)` is the stored value of a `StorageKey`, which is its default until it has been read, and `browser.writer(key)` stores each value that it observes, as in `onInput.mapToChecked --> browser.writer(enabled)`, while `browser.updater(key)(_ + 1)` transforms the stored value with each event.
+- `browser.signal(key)` is the stored value of a `StorageKey`, which is its default until it has been read, and `browser.writer(key)` stores each value that it observes, as in `onInput.mapToChecked --> browser.writer(enabled)`, while `browser.updater(key)((count, _) => count + 1)` transforms the stored value with each event, as Airstream's `Var.updater` does.
+  A transform that uses what the event carries names its type, as in `browser.updater(tags)((all, tag: String) => tag :: all)`, since Scala cannot infer it.
 - `browser.events(program)` is the result of an `IO`, and `browser.events(stream)` each value of an fs2 `Stream`, which runs while anything observes the event stream.
 - `browser.observer(event => program)` runs a program with each event, at once, as `browser.run` does, so that a request for permissions still sees the user's input.
 

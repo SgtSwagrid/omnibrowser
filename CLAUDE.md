@@ -23,6 +23,7 @@ This is a Scala library for writing browser extensions against a typed model of 
   Tabs and pages have jsdom documents (`Dom`) if the tests can load jsdom from `node_modules`, or else `FakeDocument` stand-ins.
   In-process, every document belongs to one shared jsdom window, whose interfaces (`HTMLElement`, ...) and `window` are made globals of the test, and they take turns as the global `document`; built, each tab and page is a jsdom window of its own, which is its sandbox's scope.
 - `laminar` (`omnibrowser-laminar`, Scala.js): `LaminarPage` and `LaminarContentScript`, which render an element into the body, and extension methods on `ContentBrowser` connecting storage keys, `IO`s and fs2 streams to Airstream (`signal`, `writer`, `updater`, `events`, `observer`).
+  `updater`'s transform takes the event, as Airstream's `Var.updater` does. Scala cannot infer the event's type from `-->`, so it is `Any` unless the transform annotates it.
   An fs2 stream runs through `browser.run` (so the testkit tracks it) while its event stream is started, and a `Deferred` interrupts it on stop.
 - `example`: an extension built with both, whose popup is Laminar's, and tested with the testkit in both ways. The output is under `target/out/sjs1/scala-3.9.0/omnibrowser-example/omnibrowser/`.
 - The plugin makes every test run build the extension first (through `Test / jsEnvInput`, as `test` is an input task in sbt 2), and tells the tests where it is through `OMNIBROWSER_BUILD`.

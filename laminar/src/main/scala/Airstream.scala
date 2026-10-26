@@ -38,15 +38,20 @@ extension (browser: ContentBrowser)
     observer(browser.storage.set(key, _))
 
   /**
-    * Transforms the value of `key` by `transform` each time that the observer
-    * observes anything. An update that another part of the extension makes
-    * meanwhile may be lost.
+    * Transforms the value of `key` by `transform` with each event that the
+    * observer observes, as Airstream's `Var.updater` does, as in
+    * `browser.updater(tags)((all, tag: String) => tag :: all)`, or
+    * `browser.updater(clicks)((count, _) => count + 1)` for any event. Scala
+    * cannot infer the event's type from where the observer is bound, so a
+    * transform that uses the event names its type. An update that another part
+    * of the extension makes meanwhile may be lost.
     */
-  def updater[A]
+  def updater[A, E]
     (key: StorageKey[A])
-    (transform: A => A)
+    (transform: (A, E) => A)
     (using Granted[Storage])
-    : Observer[Any] = observer(_ => browser.storage.update(key)(transform).void)
+    : Observer[E] =
+    observer(event => browser.storage.update(key)(transform(_, event)).void)
 
   /**
     * Runs `program` with each value that the observer observes, at once, as
