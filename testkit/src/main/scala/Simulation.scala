@@ -5,6 +5,7 @@ import com.alecdorrington.omnibrowser.launch.{Json, Layout, PageKind}
 import scala.collection.mutable
 import scala.scalajs.js
 import scala.scalajs.js.JSConverters.*
+import scala.util.{Failure, Try}
 
 /** Which part of the extension, or of a page, a context belongs to. */
 private[testkit] enum Kind:
@@ -49,6 +50,18 @@ private[testkit] final class Simulation(runner: Runner, activity: Activity):
   private val contexts = mutable.ArrayBuffer.empty[FakeContext]
   private var tabs     = Vector.empty[FakeTab]
   private var active   = Option.empty[Int]
+
+  /** How many tabs have been opened, from which each new tab's ID follows. */
+  private var opened = 0
+
+  /** The ends of ports that each context was given, by those that connected. */
+  private val held = mutable.Map.empty[FakeContext, List[FakePort]]
+
+  /** Every port, as its two ends. */
+  private val ports = mutable.ArrayBuffer.empty[(FakePort, FakePort)]
+
+  /** How to fail each request that each context has yet to answer. */
+  private val unanswered = mutable.Map.empty[FakeContext, List[() => Unit]]
 
   /** The text on the extension's badge, in tabs without their own. */
   var badge = ""
@@ -102,16 +115,33 @@ private[testkit] final class Simulation(runner: Runner, activity: Activity):
     * match it are injected, and gives the tab and its document.
     */
   def openTab(url: String, text: String): (FakeTab, js.Dynamic) =
-    val tab = FakeTab(tabs.size + 1, url)
+    opened += 1
+    val tab = FakeTab(opened, url)
     tabs :+= tab
     active = Some(tab.id)
-    val document = runner.openTab(
-      url,
-      text,
-      scriptsFor(url),
-      context(Kind.Content(tab.id)),
-    )
-    (tab, document)
+    (tab, load(tab, text))
+
+  /**
+    * Has `tab` load `url` showing `text`, in place of its page, whose content
+    * scripts hear nothing more, into which the content scripts that match it
+    * are injected, and gives its document.
+    */
+  def navigate(tab: Int, url: String, text: String): js.Dynamic =
+    activity.touch()
+    inTab(tab).foreach(destroy)
+    val loaded = FakeTab(tab, url)
+    tabs = tabs.map(old => if old.id == tab then loaded else old)
+    load(loaded, text)
+
+  /** Closes `tab`, whose content scripts hear nothing more. */
+  def close(tab: Int): Unit =
+    activity.touch()
+    inTab(tab).foreach(destroy)
+    tabs = tabs.filterNot(_.id == tab)
+    if active.contains(tab) then active = tabs.lastOption.map(_.id)
+
+  /** How many ports have either end still connected. */
+  def openPorts: Int = ports.count((near, far) => near.isOpen || far.isOpen)
 
   /**
     * Opens the extension's page of `kind`, if it has one, and gives its
@@ -145,58 +175,71 @@ private[testkit] final class Simulation(runner: Runner, activity: Activity):
     : js.Promise[js.Any] = send(sender, inTab(tab), message)
 
   /**
-    * Connects a port named `name` to the content scripts of `tab`, and gives
-    * its near end. The far end is given to their listeners once the caller has
-    * carried on, and if none listens, the near end is disconnected, as the
-    * browser does.
+    * Connects a port named `name` from `sender` to the content scripts of
+    * `tab`, and gives its near end. The far end is given to their listeners
+    * once the caller has carried on, and if none listens, the near end is
+    * disconnected, as the browser does.
     */
-  def connect(tab: Int, name: String): FakePort =
+  def connect
+    (
+      sender: FakeContext,
+      tab: Int,
+      name: String,
+    )
+    : FakePort =
     val (near, far) = (FakePort(name, this), FakePort(name, this))
     near.peer = far
     far.peer = near
+    ports += near -> far
     later:
-      val listeners = inTab(tab)
-        .map(_.api.runtime.onConnect)
-        .filterNot(_.isQuiet)
-      if listeners.isEmpty then near.drop() else listeners.foreach(_.fire(far))
+      val receivers = inTab(tab).filterNot(_.api.runtime.onConnect.isQuiet)
+      if receivers.isEmpty then refuse(sender, near)
+      else
+        receivers.foreach(receiver =>
+          held(receiver) = far :: held.getOrElse(receiver, Nil),
+        )
+        receivers.foreach(_.api.runtime.onConnect.fire(far))
     near
 
   /**
     * Does `action` once whatever caused it has carried on, as the browser
-    * delivers events, and counts the extension busy until then.
+    * delivers events, and counts the extension busy until then. Its failure, as
+    * a listener's, is the extension's.
     */
   def later(action: => Unit): Unit =
     activity.await()
     js.timers
-      .setTimeout(0)(
-        try action
-        finally activity.answer(),
-      )
+      .setTimeout(0):
+        Try(action).failed.foreach(activity.fail)
+        activity.answer()
 
   /** `value` after a round trip through JSON, as the browser serialises it. */
   def serialised(value: js.Any): js.Any =
     if js.isUndefined(value) then value
     else js.JSON.parse(Json.stringify(value))
 
+  /**
+    * Delivers `message` from `sender` to whichever of `receivers` listen, which
+    * fails if none of them does, as the browser does.
+    */
   private def send
     (
       sender: FakeContext,
-      listeners: Seq[FakeContext],
+      receivers: Seq[FakeContext],
       message: js.Any,
     )
     : js.Promise[js.Any] =
     activity.touch()
     new js.Promise[js.Any]((resolve, reject) =>
-      if listeners.isEmpty then
-        reject(js.Error(
-          "Could not establish connection. Receiving end does not exist.",
-        ))
+      val listeners = receivers.filterNot(_.api.runtime.onMessage.isQuiet)
+      if listeners.isEmpty then reject(js.Error(Simulation.unreachable))
       else
         respond(
           listeners,
           serialised(message),
           senderOf(sender),
           resolve(_),
+          reject(_),
         ),
     )
 
@@ -344,7 +387,9 @@ private[testkit] final class Simulation(runner: Runner, activity: Activity):
 
   /**
     * Gives each of `contexts` `message`, and `resolve` the first response, or
-    * nothing if none of them will respond.
+    * nothing if none of them will respond. If one will, but its context is
+    * destroyed first, the request fails through `reject`, as the browser's
+    * does.
     */
   private def respond
     (
@@ -352,18 +397,56 @@ private[testkit] final class Simulation(runner: Runner, activity: Activity):
       message: js.Any,
       sender: js.Object,
       resolve: js.Any => Unit,
+      reject: js.Any => Unit,
     )
     : Unit =
     activity.await()
-    var answered                           = false
-    val answer: js.Function1[js.Any, Unit] = response =>
-      if !answered then
-        answered = true
-        activity.answer()
-        resolve(serialised(response))
+    var answered                       = false
+    def settle(outcome: => Unit): Unit = if !answered then
+      answered = true
+      activity.answer()
+      outcome
+    val answer: js.Function1[js.Any, Unit] =
+      response => settle(resolve(serialised(response)))
     val replies =
-      contexts.flatMap(_.api.runtime.onMessage.fire(message, sender, answer))
-    if !replies.exists(isTrue) then answer(js.undefined)
+      contexts.flatMap(_.api.runtime.onMessage.hear(message, sender, answer))
+    replies.collect { case Failure(error) => activity.fail(error) }
+    if !replies.exists(_.toOption.exists(isTrue)) then answer(js.undefined)
+    else
+      contexts.foreach(context =>
+        unanswered(context) =
+          (() => settle(reject(js.Error(Simulation.closed)))) ::
+            unanswered.getOrElse(context, Nil),
+      )
+
+  /**
+    * Destroys `context`, as when its page closes or navigates, which hears
+    * nothing more, whose ports disconnect, and whose unanswered requests fail.
+    */
+  private def destroy(context: FakeContext): Unit =
+    contexts -= context
+    held.remove(context).foreach(_.foreach(_.disconnect()))
+    unanswered.remove(context).foreach(_.foreach(fail => fail()))
+
+  /**
+    * Disconnects `port`, which reached nothing, failing if `sender` does not
+    * read why, as Chrome reports it as an error otherwise.
+    */
+  private def refuse(sender: FakeContext, port: FakePort): Unit =
+    val error = js.Error(Simulation.unreachable)
+    if !sender.api.runtime.failing(error, () => port.drop()) then
+      activity.fail(UncheckedError(Simulation.unreachable))
+
+  /**
+    * Shows `text` in `tab`, into which the content scripts that match its URL
+    * are injected, and gives its document.
+    */
+  private def load(tab: FakeTab, text: String): js.Dynamic = runner.openTab(
+    tab.url,
+    text,
+    scriptsFor(tab.url),
+    context(Kind.Content(tab.id)),
+  )
 
   private def change
     (
@@ -419,3 +502,11 @@ private[testkit] object Simulation:
 
   /** The extension's ID in the fake browser. */
   val id = "omnibrowser-test"
+
+  /** Why a message or port reached nothing, as the browser says. */
+  val unreachable =
+    "Could not establish connection. Receiving end does not exist."
+
+  /** Why a request failed when its receiver went before answering it. */
+  val closed =
+    "A listener indicated an asynchronous response by returning true, but the message channel closed before a response was received"

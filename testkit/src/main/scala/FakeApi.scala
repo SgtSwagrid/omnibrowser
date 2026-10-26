@@ -1,6 +1,7 @@
 package com.alecdorrington.omnibrowser.testkit
 
 import scala.scalajs.js
+import scala.util.Try
 
 /**
   * The WebExtensions API that one context of a [[FakeBrowser]] sees, which the
@@ -40,10 +41,19 @@ private[testkit] final class FakeEvent extends js.Object:
   /** Whether nothing listens. */
   def isQuiet: Boolean = listeners.isEmpty
 
-  /** Calls each listener with `arguments`, and gives what each returned. */
-  def fire(arguments: js.Any*): Seq[js.Any] = listeners
+  /**
+    * Calls each listener with `arguments`, and gives what each returned, or
+    * threw, as one listener's failure does not keep the others from hearing.
+    */
+  def hear(arguments: js.Any*): Seq[Try[js.Any]] = listeners
     .toSeq
-    .map(_.call(js.undefined, arguments*))
+    .map(listener => Try(listener.call(js.undefined, arguments*)))
+
+  /**
+    * Calls each listener with `arguments`, and gives what each returned, or
+    * throws, once each has heard, what the first that failed threw.
+    */
+  def fire(arguments: js.Any*): Seq[js.Any] = hear(arguments*).map(_.get)
 
 private[testkit] final class FakeRuntime
   (
@@ -58,6 +68,34 @@ private[testkit] final class FakeRuntime
 
   def sendMessage(message: js.Any): js.Promise[js.Any] =
     simulation.deliver(context, message)
+
+  /** Why the last call failed, while a listener hears of it. */
+  private var error: js.UndefOr[js.Object] = js.undefined
+
+  /** Whether the extension has read [[error]] since it was given. */
+  private var read = true
+
+  def lastError: js.UndefOr[js.Object] =
+    read = true
+    error
+
+  /**
+    * Does `action` with `failure` as the last error, and gives whether the
+    * extension read it meanwhile, as Chrome reports it as an error otherwise.
+    */
+  private[testkit] final def failing
+    (failure: js.Error, action: () => Unit)
+    : Boolean =
+    error = failure
+    read = false
+    Try(action()).fold(
+      error =>
+        this.error = js.undefined
+        throw error
+      ,
+      _ => this.error = js.undefined,
+    )
+    read
 
   val onMessage: FakeEvent   = FakeEvent()
   val onConnect: FakeEvent   = FakeEvent()
@@ -116,8 +154,18 @@ private[testkit] final class FakeTabs
     )
     : js.Promise[js.Any] = simulation.deliver(context, tabId, message)
 
-  def connect(tabId: Int, info: js.Dynamic): FakePort =
-    simulation.connect(tabId, info.name.asInstanceOf[String])
+  def connect(tabId: Int, info: js.UndefOr[js.Dynamic]): FakePort = simulation
+    .connect(
+      context,
+      tabId,
+      info.toOption.fold("")(FakeTabs.name),
+    )
+
+private[testkit] object FakeTabs:
+
+  /** The name of a port that `info` asks for, which is `""` if it gives none. */
+  def name(info: js.Dynamic): String =
+    if js.isUndefined(info.name) then "" else info.name.asInstanceOf[String]
 
 /**
   * One end of a port between two contexts of a [[FakeBrowser]], which gives the
@@ -138,12 +186,13 @@ private[testkit] final class FakePort
   private var connected = true
 
   def postMessage(message: js.Any): Unit =
-    if !connected then
+    if connected then
+      val json = simulation.serialised(message)
+      peer.foreach(other => simulation.later(other.receive(json)))
+    else
       throw js.JavaScriptException(
         js.Error("Attempting to use a disconnected port object"),
       )
-    val json = simulation.serialised(message)
-    peer.foreach(other => simulation.later(other.receive(json)))
 
   /** Disconnects both ends, of which only the other end hears. */
   def disconnect(): Unit = if connected then
@@ -153,6 +202,9 @@ private[testkit] final class FakePort
   /** Gives this end's listeners `message`, unless it has disconnected. */
   private[testkit] final def receive(message: js.Any): Unit =
     if connected then onMessage.fire(message, this)
+
+  /** Whether this end is still connected. */
+  private[testkit] final def isOpen: Boolean = connected
 
   /** Disconnects this end, as the other end did, and tells its listeners. */
   private[testkit] final def drop(): Unit = if connected then

@@ -91,6 +91,10 @@ browser.tabs.values(problem, tab) // Its value, then each new value.
 ```
 
 While nothing in a tab shares a value, its value there is its default, as an unset `StorageKey`'s is, and a request of a tab where nothing serves the endpoint fails.
+`values` follows the tab: it gives the default before a content script there begins sharing the value, after it stops, and while the tab loads another page, whose content script it then finds, as a page that begins sharing values tells the rest of the extension.
+If several content scripts of one page share a value, the one that began last is its owner, until it stops.
+Chrome may stop the background while it watches a tab, as an open port does not keep it running, so watch from a page, such as the popup.
+Names beginning `omnibrowser/` are the library's own.
 
 Firefox for Android may install the extension unless it declares `android = Android.Unsupported`, and `Android.Supported(Some("120.0"))` sets the earliest version. The build warns of each permission that the extension asks for and Firefox for Android lacks.
 
@@ -127,7 +131,7 @@ The browser connects Laminar to the extension:
   A transform that uses what the event carries names its type, as in `browser.updater(tags)((all, tag: String) => tag :: all)`, since Scala cannot infer it.
 - `browser.events(program)` is the result of an `IO`, and `browser.events(stream)` each value of an fs2 `Stream`, which runs while anything observes the event stream.
 - `browser.observer(event => program)` runs a program with each event, at once, as `browser.run` does, so that a request for permissions still sees the user's input.
-- In the background or a page, `browser.signal(shared, tab)` is the value of a `Shared.tab` in a tab, which goes back to its default once nothing there shares it, as in `browser.events(browser.tabs.active).collect { case Some(tab) => tab.id }.flatMapSwitch(browser.signal(problem, _))`.
+- In the background or a page, `browser.signal(shared, tab)` is the value of a `Shared.tab` in a tab, which follows it as `browser.tabs.values` does, as in `browser.events(browser.tabs.active).collect { case Some(tab) => tab.id }.flatMapSwitch(browser.signal(problem, _))`.
 
 ## 🧪 Testing
 
@@ -147,7 +151,7 @@ test("A page's words are added to the total."):
 ```
 
 Each action (`visit`, `openPopup`, `clickAction`, `call`, `store`, ...) waits until the extension has finished responding to it, and fails if the extension failed.
-A test may also act as the background would, as in `browser.call(endpoint, page.tab.get)(request)` and `browser.shared(value, page.tab.get)`.
+A test may also act as the background would, as in `browser.call(endpoint, page.tab.get)(request)` and `browser.shared(value, page.tab.get)`, and close a tab or have it load another page, as in `browser.close(page.tab.get)` and `browser.navigate(page.tab.get, url)`.
 `FakeBrowser.install` runs the extension's code within the test.
 
 Each page has a DOM if the tests can load [jsdom](https://github.com/jsdom/jsdom), which `npm install --save-dev jsdom` installs into the project's `node_modules`, and Laminar's pages need one.

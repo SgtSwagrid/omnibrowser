@@ -109,13 +109,21 @@ private[omnibrowser] object Messages:
   /** A message through a port, holding a new value. */
   def value(json: js.Any): js.Any = js.Dynamic.literal(value = json)
 
-  /** The value of `shared` that `message`, from a port, holds. */
-  def value[A](shared: Shared.Tab[A], message: js.Any): IO[A] = IO.fromEither(
-    field(message, "value")
-      .toRight("The message holds no value.")
-      .flatMap(shared.codec.decode)
-      .leftMap(MessagingError(shared.name, _)),
-  )
+  /** A message through a port, saying that nothing shares its value now. */
+  def unshared: js.Any = js.Dynamic.literal(unshared = true)
+
+  /**
+    * The value of `shared` that `message`, from a port, holds, or nothing if it
+    * says that nothing shares it.
+    */
+  def watched[A](shared: Shared.Tab[A], message: js.Any): IO[Option[A]] = IO
+    .fromEither(
+      field(message, "value")
+        .map(shared.codec.decode(_).map(Some(_)))
+        .orElse(Option.when(hasField(message, "unshared"))(Right(None)))
+        .getOrElse(Left("The message holds no value."))
+        .leftMap(MessagingError(shared.name, _)),
+    )
 
   private def answer[Req, Res]
     (
@@ -130,15 +138,28 @@ private[omnibrowser] object Messages:
     )
     .flatMap(run(_, sender))
     .map(response => success(endpoint.response.encode(response)))
-    .handleError(error => failure(error.getMessage))
+    .handleError(error => failure(reason(error)))
+
+  /**
+    * Why `error` happened: a messaging error's reason, or else what its message
+    * says, or else its name.
+    */
+  def reason(error: Throwable): String = error match
+    case MessagingError(_, reason) => reason
+    case other => Option(other.getMessage).getOrElse(other.toString)
 
   private def decode[Res]
     (codec: Codec[Res], message: js.Any)
     : Either[String, Res] =
     (field(message, "response"), field(message, "error")) match
       case (Some(response), _) => codec.decode(response)
-      case (None, Some(error)) => Left(error.toString)
+      case (None, Some(error)) => Left(stated(error))
       case (None, None)        => Left("Nothing in the extension serves it.")
+
+  /** Why a request failed, as its response says. */
+  private def stated(error: js.Any): String =
+    if Codec.isNull(error) then "It failed for no stated reason."
+    else error.toString
 
   private def field(message: js.Any, name: String): Option[js.Any] = Option
     .when(hasField(message, name))(

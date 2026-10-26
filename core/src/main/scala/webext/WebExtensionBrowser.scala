@@ -1,6 +1,7 @@
 package com.alecdorrington.omnibrowser.webext
 
-import cats.effect.{Deferred, IO, Resource}
+import cats.Eq
+import cats.effect.{IO, Resource}
 import cats.syntax.all.*
 import com.alecdorrington.omnibrowser.*
 import com.alecdorrington.omnibrowser.webext.Interop.{events, promise}
@@ -42,7 +43,7 @@ private[omnibrowser] final class WebExtensionBrowser
   override def storage(using Granted[Permission.Storage]): Browser.Storage =
     WebExtensionStorage(api.storage)
 
-  override lazy val tabs: Browser.Tabs = WebExtensionTabs(api.tabs)
+  override lazy val tabs: Browser.Tabs = WebExtensionTabs(api.tabs, api.runtime)
 
   override lazy val action: Browser.Action = WebExtensionAction(api.action)
 
@@ -58,83 +59,6 @@ private[omnibrowser] final class WebExtensionRuntime
     (endpoint: Endpoint[Req, Res])
     (request: Req)
     : IO[Res] = Messages.exchange(endpoint, request)(api.sendMessage)
-
-/**
-  * What a content script offers the rest of the extension from its tab, through
-  * `api`, starting the programs that it runs with `launch`.
-  */
-private[omnibrowser] final class WebExtensionSharing
-  (api: RuntimeApi, launch: IO[Unit] => Unit):
-
-  /** Answers the requests of `endpoint` through `run`, while in use. */
-  def serve[Req, Res]
-    (endpoint: Endpoint[Req, Res])
-    (run: Req => IO[Res])
-    : Resource[IO, Unit] = Interop.listening(
-    api.onMessage,
-    Messages.listener(endpoint, launch)((request, _) => run(request)),
-  )
-
-  /**
-    * Gives anyone who asks the value of `signal` as that of `shared`, and each
-    * port that connects for it the value, then each new value, while in use.
-    */
-  def share[A]
-    (
-      shared: Shared.Tab[A],
-      signal: Signal[IO, A],
-    )
-    : Resource[IO, Unit] =
-    for
-      released <- Resource.make(Deferred[IO, Unit])(_.complete(()).void)
-      _        <- serve(shared.endpoint)(_ => signal.get)
-      _        <- Interop.listening(
-        api.onConnect,
-        connected(shared, signal, released),
-      )
-    yield ()
-
-  /**
-    * A listener that publishes `signal` through each port that connects for
-    * `shared`, until the port disconnects, or until `released`.
-    */
-  private def connected[A]
-    (
-      shared: Shared.Tab[A],
-      signal: Signal[IO, A],
-      released: Deferred[IO, Unit],
-    )
-    : js.Function1[PortApi, Unit] = port =>
-    if port.name == shared.name then
-      val gone = Deferred.unsafe[IO, Unit]
-      port.onDisconnect.addListener(_ => launch(gone.complete(()).void))
-      launch(
-        publish(port, shared.codec, signal)
-          .race(gone.get)
-          .race(released.get)
-          .guarantee(IO(port.disconnect()))
-          .void,
-      )
-
-  /** Sends through `port` the value of `signal`, then each new value. */
-  private def publish[A]
-    (
-      port: PortApi,
-      codec: Codec[A],
-      signal: Signal[IO, A],
-    )
-    : IO[Unit] = signal
-    .discrete
-    .foreach(value => post(port, codec.encode(value)))
-    .compile
-    .drain
-
-  /**
-    * Sends the value `json` through `port`, unless it has disconnected, as it
-    * may have before this side has heard.
-    */
-  private def post(port: PortApi, json: js.Any): IO[Unit] =
-    IO(port.postMessage(Messages.value(json))).handleError(_ => ())
 
 private[omnibrowser] final class WebExtensionStorage
   (api: StorageApi)
@@ -179,8 +103,12 @@ private[omnibrowser] final class WebExtensionStorage
         .leftMap(StorageError(key.name, _)),
     )
 
+/**
+  * The browser's tabs, through `api`, and through `runtime` the announcements
+  * of the pages in them that begin sharing values.
+  */
 private[omnibrowser] final class WebExtensionTabs
-  (api: TabsApi)
+  (api: TabsApi, runtime: RuntimeApi)
   extends Browser.Tabs:
 
   override def all: IO[List[Tab]] = query(js.Dynamic.literal())
@@ -200,23 +128,52 @@ private[omnibrowser] final class WebExtensionTabs
     (request: Req)
     : IO[Res] = Messages.exchange(endpoint.endpoint, request)(send(tab, _))
 
-  override def get[A](shared: Shared.Tab[A], tab: TabId): IO[A] =
-    find(shared, tab).map(_.getOrElse(shared.default))
+  override def get[A](shared: Shared.Tab[A], tab: TabId): IO[A] = ask(
+    tab,
+    Messages.request(shared.reading, shared.name),
+  ).flatMap(_.traverse(Messages.response(shared.reading, _)))
+    .adaptError { case MessagingError(_, reason) =>
+      MessagingError(shared.name, reason)
+    }
+    .map(_.getOrElse(shared.default))
 
   override def values[A](shared: Shared.Tab[A], tab: TabId): Stream[IO, A] =
     Interop
-      .port(api.connect(tab.toInt, connection(shared.name)))
-      .evalMap(Messages.value(shared, _))
-      .interruptWhen(unshared(shared, tab)) ++ Stream.emit(shared.default)
+      .eventsFrom(())(runtime.onMessage)(announced(tab))
+      .switchMap(_ => watch(shared, tab))
+      .changes(using Eq.fromUniversalEquals)
 
   private def query(info: js.Object): IO[List[Tab]] = promise(api.query(info))
     .map(_.toList.map(WebExtensionTabs.tab))
 
-  /** The value of `shared` in `tab`, if a content script there shares it. */
-  private def find[A](shared: Shared.Tab[A], tab: TabId): IO[Option[A]] = ask(
-    tab,
-    Messages.request(shared.endpoint, ()),
-  ).flatMap(_.traverse(Messages.response(shared.endpoint, _)))
+  /**
+    * The value of `shared` in the page now in `tab`, then each new value, until
+    * the page goes, and then its default.
+    */
+  private def watch[A](shared: Shared.Tab[A], tab: TabId): Stream[IO, A] =
+    Interop
+      .port(
+        api.connect(tab.toInt, connection(shared.name)),
+        runtime,
+      )
+      .evalMap(Messages.watched(shared, _))
+      .map(_.getOrElse(shared.default)) ++ Stream.emit(shared.default)
+
+  /**
+    * A listener that gives `emit` nothing each time that the page in `tab`
+    * announces that it has begun sharing values, and leaves every message to
+    * the other listeners.
+    */
+  private def announced(tab: TabId)(emit: Unit => Unit): MessageListener =
+    (message, sender, _) =>
+      if isAnnouncement(message) &&
+        Messages.sender(sender).tab.exists(_.id == tab)
+      then emit(())
+      false
+
+  private def isAnnouncement(message: js.Any): Boolean = Messages
+    .endpoint(message)
+    .contains(Shared.announcement.name)
 
   /**
     * The answer to `message` from the content scripts of `tab`, if any answered
@@ -228,16 +185,6 @@ private[omnibrowser] final class WebExtensionTabs
       Option(_).filter(Messages.isAnswer),
     )
 
-  /**
-    * Completes once it finds that nothing in `tab` shares `shared`, and
-    * otherwise never.
-    */
-  private def unshared[A]
-    (shared: Shared.Tab[A], tab: TabId)
-    : IO[Either[Throwable, Unit]] = find(shared, tab)
-    .flatMap(found => IO.never.whenA(found.isDefined))
-    .attempt
-
   /** Sends `message` to the content scripts of `tab`'s page. */
   private def send(tab: TabId, message: js.Any): js.Promise[js.Any] = api
     .sendMessage(
@@ -246,11 +193,11 @@ private[omnibrowser] final class WebExtensionTabs
       WebExtensionTabs.page,
     )
 
-  /** How to connect a port named `name` to the content scripts of a page. */
+  /** How to connect a port that watches `name` to a page's content scripts. */
   private def connection(name: String): js.Object = js
     .Object
     .assign(
-      js.Dynamic.literal(name = name),
+      js.Dynamic.literal(name = Shared.port(name)),
       WebExtensionTabs.page,
     )
 

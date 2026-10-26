@@ -47,11 +47,17 @@ private[omnibrowser] type MessageListener = js.Function3[
 @js.native
 private[omnibrowser] trait RuntimeApi extends js.Object:
 
-  val id: String                                               = js.native
-  def getURL(path: String): String                             = js.native
-  def sendMessage(message: js.Any): js.Promise[js.Any]         = js.native
-  val onMessage: Event[MessageListener]                        = js.native
-  val onConnect: Event[js.Function1[PortApi, Unit]]            = js.native
+  val id: String                                       = js.native
+  def getURL(path: String): String                     = js.native
+  def sendMessage(message: js.Any): js.Promise[js.Any] = js.native
+  val onMessage: Event[MessageListener]                = js.native
+  val onConnect: Event[js.Function1[PortApi, Unit]]    = js.native
+
+  /**
+    * Why the last call failed, as during the listener of a port that could not
+    * connect, which Chrome reports as an error unless the listener reads it.
+    */
+  def lastError: js.UndefOr[js.Object]                         = js.native
   val onInstalled: Event[js.Function1[InstalledDetails, Unit]] = js.native
   val onStartup: Event[js.Function0[Unit]]                     = js.native
 

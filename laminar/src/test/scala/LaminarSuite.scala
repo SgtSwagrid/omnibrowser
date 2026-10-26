@@ -1,10 +1,10 @@
 package com.alecdorrington.omnibrowser.laminar
 
-import cats.effect.IO
+import cats.effect.{Deferred, IO}
 import cats.syntax.all.*
 import com.alecdorrington.omnibrowser.{
   Background, Browser, BrowserExtension, ContentScript, Endpoint, Shared,
-  StorageKey,
+  StorageKey, TabBrowser, TabId,
 }
 import com.alecdorrington.omnibrowser.Permission.Storage
 import com.alecdorrington.omnibrowser.testkit.FakeBrowser
@@ -131,6 +131,27 @@ class LaminarSuite extends CatsEffectSuite:
       presses <- popup.text(".presses")
     yield assertEquals(presses, "0 presses")
 
+  test(
+    "A page shows a tab's default value again once nothing there shares it.",
+  ):
+    for
+      browser <- FakeBrowser.install(Presser)
+      page    <- browser.visit("https://example.com/")
+      _       <- browser.call(Presser.press, page.tab.get)(())
+      popup   <- browser.openPopup
+      before  <- popup.text(".presses")
+      _       <- browser.call(Presser.release, page.tab.get)(())
+      after   <- popup.text(".presses")
+    yield
+      assertEquals(before, "1 presses")
+      assertEquals(after, "0 presses")
+
+  test("A content script cannot watch a tab's shared value."):
+    assert(
+      compileErrors("(??? : TabBrowser).signal(Presser.presses, TabId(1))")
+        .contains("Only the background and pages watch"),
+    )
+
 /** Counts clicks, with each of the ways in which Laminar uses the browser. */
 object Tally extends BrowserExtension[Storage]:
 
@@ -247,13 +268,15 @@ object Presser extends BrowserExtension[Any]:
   /** Presses a page. */
   val press = Endpoint.tab[Unit, Unit]("press")
 
+  /** Stops a page sharing its presses. */
+  val release = Endpoint.tab[Unit, Unit]("release")
+
   override def contentScripts() = Seq(ContentScript("https://*/*")(browser =>
-    SignallingRef[IO]
-      .of(0)
-      .flatMap(count =>
-        (browser.serve(press)(_ => count.update(_ + 1)) >>
-          browser.share(presses)(count)).useForever,
-      ),
+    (SignallingRef[IO].of(0), Deferred[IO, Unit]).flatMapN((count, released) =>
+      (browser.serve(press)(_ => count.update(_ + 1)) >>
+        browser.serve(release)(_ => released.complete(()).void) >>
+        browser.share(presses)(count)).surround(released.get),
+    ),
   ))
 
   override def popup() = Some(LaminarPage(browser =>

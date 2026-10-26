@@ -18,23 +18,32 @@ private[omnibrowser] object Interop:
   def events[A, L <: js.Function]
     (event: Event[L])
     (listener: (A => Unit) => L)
-    : Stream[IO, A] =
-    for
-      offer <- offering[A]
-      value <- Stream.resource(listening(event, listener(offer))) >>
-        Stream.fromQueueUnterminated(offer.queue)
-    yield value
+    : Stream[IO, A] = heard(event, listener)(Stream.fromQueueUnterminated(_))
+
+  /**
+    * `first`, once the stream listens to `event`, then the values that `event`
+    * gives the listener, as [[events]] does.
+    */
+  def eventsFrom[A, L <: js.Function]
+    (first: A)
+    (event: Event[L])
+    (listener: (A => Unit) => L)
+    : Stream[IO, A] = heard(event, listener)(queue =>
+    Stream.emit(first) ++ Stream.fromQueueUnterminated(queue),
+  )
 
   /**
     * The messages that the port `open` opens is sent, until it is disconnected,
     * which it is once the stream ends. It is opened along with its listeners,
-    * so that they hear of everything that it is sent.
+    * so that they hear of everything that it is sent. Its failure to connect is
+    * read from `runtime`, as Chrome reports it as an error otherwise.
     */
-  def port(open: => PortApi): Stream[IO, js.Any] =
+  def port(open: => PortApi, runtime: RuntimeApi): Stream[IO, js.Any] =
     for
       offer <- offering[Option[js.Any]]
-      _     <-
-        Stream.bracket(IO(attach(open, offer)))(port => IO(port.disconnect()))
+      _     <- Stream.bracket(IO(attach(open, runtime, offer)))(port =>
+        IO(port.disconnect()),
+      )
       message <- Stream.fromQueueNoneTerminated(offer.queue)
     yield message
 
@@ -45,15 +54,38 @@ private[omnibrowser] object Interop:
     IO(event.removeListener(listener)),
   )
 
-  /** Gives `offer` each message that `port` is sent, then nothing once it ends. */
+  /**
+    * What `values` makes of the queue of the values that `event` gives a
+    * listener, once the stream listens.
+    */
+  private def heard[A, B, L <: js.Function]
+    (event: Event[L], listener: (A => Unit) => L)
+    (values: Queue[IO, A] => Stream[IO, B])
+    : Stream[IO, B] =
+    for
+      offer <- offering[A]
+      value <- Stream.resource(listening(event, listener(offer))) >>
+        values(offer.queue)
+    yield value
+
+  /**
+    * Gives `offer` each message that `port` is sent, then nothing once it ends,
+    * having read why from `runtime`.
+    */
   private def attach
     (
       port: PortApi,
+      runtime: RuntimeApi,
       offer: Option[js.Any] => Unit,
     )
     : PortApi =
     port.onMessage.addListener(message => offer(Some(message)))
-    port.onDisconnect.addListener(_ => offer(None))
+    port
+      .onDisconnect
+      .addListener(_ =>
+        runtime.lastError.foreach(_ => ())
+        offer(None),
+      )
     port
 
   /** A function that offers each value it is given to its queue, at once. */

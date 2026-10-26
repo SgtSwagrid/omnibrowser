@@ -40,7 +40,12 @@ trait TabBrowser extends ContentBrowser:
   /**
     * Shares `signal` as the value of `shared` in this script's tab, while the
     * resource is in use, so that the background and pages see its value, then
-    * each new value. Once it is released, the value there is the default again.
+    * each new value. If several content scripts of the page share it, the one
+    * that began last is its owner, until it stops. Once none shares it, the
+    * value there is the default again.
+    *
+    * A page that begins sharing values tells the background and pages, so that
+    * those watching its tab find it, which may wake the background.
     */
   def share[A](shared: Shared.Tab[A])(signal: Signal[IO, A]): Resource[IO, Unit]
 
@@ -128,10 +133,15 @@ object Browser:
     def get[A](shared: Shared.Tab[A], tab: TabId): IO[A]
 
     /**
-      * The value of `shared` in `tab`, then each new value that it is given,
-      * while a content script there shares it, and then its default, at which
-      * the stream ends. It does not see a content script that begins sharing it
-      * later.
+      * The value of `shared` in `tab`, then each new value: its default
+      * whenever nothing there shares it, as before a content script there
+      * begins sharing it, after it stops, or while the tab loads another page,
+      * and otherwise the value that the content script shares. It follows the
+      * tab from page to page, until the stream is stopped.
+      *
+      * Chrome may stop the background while it watches, as an open port does
+      * not keep it running, so a page, such as the popup, is the place to
+      * watch.
       */
     def values[A](shared: Shared.Tab[A], tab: TabId): Stream[IO, A]
 

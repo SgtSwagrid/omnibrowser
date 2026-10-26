@@ -36,6 +36,21 @@ final class FakeBrowser private (
     simulation.openTab(url, text),
   ).map((tab, document) => FakePage(document, Some(TabId(tab.id)), settle))
 
+  /** Closes `tab`, as the user would. */
+  def close(tab: TabId): IO[Unit] = act(simulation.close(tab.toInt))
+
+  /**
+    * Has `tab` load `url` showing `text`, as on following a link, in place of
+    * its page, into which the browser injects each of the extension's content
+    * scripts that match it.
+    */
+  def navigate(tab: TabId, url: String, text: String = ""): IO[FakePage] = act(
+    simulation.navigate(tab.toInt, url, text),
+  ).map(FakePage(_, Some(tab), settle))
+
+  /** How many ports are open, for the testkit's own tests. */
+  private[testkit] def openPorts: IO[Int] = IO(simulation.openPorts)
+
   /** Opens the extension's popup. */
   def openPopup: IO[FakePage] = openPage(PageKind.Popup)
 
@@ -275,6 +290,13 @@ final case class NoDom()
   extends Exception(
     "The page has no DOM, as the tests could not load jsdom. Install it with `npm install --save-dev jsdom`.",
   )
+
+/**
+  * The extension did not read `runtime.lastError` while a listener heard of the
+  * failure `reason`, which Chrome reports as an error.
+  */
+final case class UncheckedError(reason: String)
+  extends Exception(s"Unchecked runtime.lastError: $reason")
 
 /** The extension was still busy when the test gave up waiting for it. */
 final case class Unsettled()
