@@ -2,7 +2,7 @@ package com.alecdorrington.omnibrowser.webext
 
 import cats.effect.IO
 import cats.syntax.all.*
-import com.alecdorrington.omnibrowser.{Codec, Endpoint, MessagingError}
+import com.alecdorrington.omnibrowser.{Codec, Endpoint, MessagingError, Sender}
 import scala.scalajs.js
 
 /**
@@ -28,6 +28,16 @@ private[omnibrowser] object Messages:
   def endpoint(message: js.Any): Option[String] = field(message, "omnibrowser")
     .filter(js.typeOf(_) == "string")
     .map(_.asInstanceOf[String])
+
+  /** Who made a request, as the browser describes them as `sender`. */
+  def sender(sender: js.Any): Sender = Sender(
+    tab = field(sender, "tab").map(tab =>
+      WebExtensionTabs.tab(tab.asInstanceOf[TabApi]),
+    ),
+    url = field(sender, "url")
+      .filter(js.typeOf(_) == "string")
+      .map(_.asInstanceOf[String]),
+  )
 
   /** What a request asks for. */
   def payload(message: js.Any): js.Any =

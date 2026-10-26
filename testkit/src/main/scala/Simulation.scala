@@ -129,6 +129,7 @@ private[testkit] final class Simulation(runner: Runner, activity: Activity):
         respond(
           listeners,
           serialised(message),
+          senderOf(sender),
           resolve(_),
         ),
     )
@@ -284,6 +285,7 @@ private[testkit] final class Simulation(runner: Runner, activity: Activity):
     (
       contexts: Seq[FakeContext],
       message: js.Any,
+      sender: js.Object,
       resolve: js.Any => Unit,
     )
     : Unit =
@@ -294,7 +296,6 @@ private[testkit] final class Simulation(runner: Runner, activity: Activity):
         answered = true
         activity.answer()
         resolve(serialised(response))
-    val sender  = js.Dynamic.literal(id = Simulation.id)
     val replies =
       contexts.flatMap(_.api.runtime.onMessage.fire(message, sender, answer))
     if !replies.exists(isTrue) then answer(js.undefined)
@@ -331,6 +332,20 @@ private[testkit] final class Simulation(runner: Runner, activity: Activity):
     runner.optionalPermissions(name) || runner.optionalHosts.contains(name)
 
   private def isHeld(name: String): Boolean = isRequired(name) || granted(name)
+
+  /** Who sent a message from `context`, as the browser describes them. */
+  private def senderOf(context: FakeContext): js.Object = context.kind match
+    case Kind.Content(id) => tabs
+        .find(_.id == id)
+        .fold(js.Dynamic.literal(id = Simulation.id))(tab =>
+          js.Dynamic
+            .literal(
+              id = Simulation.id,
+              tab = tabObject(tab),
+              url = tab.url,
+            ),
+        )
+    case _ => js.Dynamic.literal(id = Simulation.id)
 
   private def isTrue(reply: js.Any): Boolean = js.typeOf(reply) == "boolean" &&
     reply.asInstanceOf[Boolean]

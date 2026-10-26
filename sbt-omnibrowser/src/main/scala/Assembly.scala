@@ -46,11 +46,16 @@ final case class Assembly
   private def describe(directory: File, runner: File, log: Logger): Unit =
     val exit = Process(
       command(directory, runner),
-    ).!(ProcessLogger(log.info(_), log.error(_)))
+    ).!(ProcessLogger(report(log), log.error(_)))
     if exit != 0 then
       throw MessageOnlyException(
         s"Could not build the extension for ${ target.id }.",
       )
+
+  /** Logs a line that the runner printed, as a warning if it says it is one. */
+  private def report(log: Logger)(line: String): Unit = line match
+    case s"warning: $warning" => log.warn(s"${ target.id }: $warning")
+    case other                => log.info(other)
 
   private def command(directory: File, runner: File): Seq[String] = Seq(
     "node",
@@ -99,6 +104,7 @@ private[plugin] object Runner:
       |
       |const files = globalThis.__omnibrowserFiles;
       |if (!files) fail(`The bundle does not describe the extension ${extension}.`);
+      |for (const warning of globalThis.__omnibrowserWarnings ?? []) console.log(`warning: ${warning}`);
       |
       |for (const [name, content] of Object.entries(files)) {
       |  const file = path.join(directory, name);
