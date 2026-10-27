@@ -18,14 +18,17 @@ addSbtPlugin("com.alecdorrington" % "sbt-omnibrowser" % "0.5.0")
 
 // build.sbt
 lazy val extension = project.enablePlugins(OmnibrowserPlugin)
+
+// build.sbt, to write pages with Laminar
+libraryDependencies += "com.alecdorrington" %% "omnibrowser-laminar" % omnibrowserVersion.value
 ```
 
-| Module | For | Added by |
-| --- | --- | --- |
-| [`sbt-omnibrowser`](sbt-omnibrowser) | Building for Chrome and Firefox | You |
-| [`omnibrowser-core`](core) | Writing the extension | The plugin |
-| [`omnibrowser-testkit`](testkit) | Testing it in a fake browser | The plugin |
-| [`omnibrowser-laminar`](laminar) | Writing its pages with [Laminar](https://laminar.dev) | You: `"com.alecdorrington" %% "omnibrowser-laminar" % omnibrowserVersion.value` |
+| Module | For |
+| --- | --- |
+| [`omnibrowser-core`](core) | Writing the extension |
+| [`sbt-omnibrowser`](sbt-omnibrowser) | Building it for Chrome and Firefox |
+| [`omnibrowser-testkit`](testkit) | Testing it in a fake browser |
+| [`omnibrowser-laminar`](laminar) | Writing its pages with [Laminar](https://laminar.dev) |
 
 ## 🚀 Usage
 
