@@ -15,7 +15,7 @@
 
 ```scala
 // project/plugins.sbt
-addSbtPlugin("com.alecdorrington" % "sbt-omnibrowser" % "0.5.0")
+addSbtPlugin("com.alecdorrington" % "sbt-omnibrowser" % "0.6.0")
 
 // build.sbt
 lazy val extension = project.enablePlugins(OmnibrowserPlugin)
