@@ -34,7 +34,7 @@ object WordCount extends BrowserExtension[Permission.Storage]:
 
   override val name = "Word Count"
 
-  val count = Endpoint[String, Int]("count")
+  val count = Message[String, Int]("count")
   val total = StorageKey.local[Int]("total", 0)
 
   override def background() = Background(
@@ -76,8 +76,8 @@ Content scripts get a bundle of their own, holding only what `contentScripts()` 
 
 | | Declared as | Given by | Taken by |
 | --- | --- | --- | --- |
-| Request | `Endpoint[Req, Res](name)` | The background: `serve` | Pages and content scripts: `runtime.call` |
-| Request of a tab | `Endpoint.tab[Req, Res](name)` | Its content script: `serve` | The background and pages: `tabs.call` |
+| Request | `Message[Req, Res](name)` | The background: `serve` | Pages and content scripts: `runtime.call` |
+| Request of a tab | `Message.tab[Req, Res](name)` | Its content script: `serve` | The background and pages: `tabs.call` |
 | Value of a tab | `Shared.tab[A](name, default)` | Its content script: `share`, from an fs2 `Signal` | The background and pages: `tabs.get`, `tabs.values` |
 | Stored value | `StorageKey.local[A](name, default)` | Any part: `storage.set` | Any part: `storage.get`, `storage.values` |
 

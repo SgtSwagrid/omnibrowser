@@ -12,7 +12,7 @@ import scala.scalajs.reflect.annotation.EnableReflectiveInstantiation
   * part starts, and its code is bundled only where it runs. A content script's
   * bundle holds what its own method reaches, and whatever the object's own
   * values reach, so they should be only what every part shares, such as its
-  * [[Endpoint]]s and [[StorageKey]]s.
+  * [[Message]]s and [[StorageKey]]s.
   *
   * @tparam P
   *   The extension's permissions, as an intersection of [[Permission]] types
@@ -98,20 +98,20 @@ abstract class BrowserExtension[P : Permissions as P]:
     (run: (Tab, Browser) => IO[Unit])
     : Handler = Handler.ActionClicked(run)
 
-  /** Answers the requests that the extension's other parts make of `endpoint`. */
+  /** Answers the requests that the extension's other parts send as `message`. */
   protected final def serve[Req, Res]
-    (endpoint: Endpoint[Req, Res])
+    (message: Message[Req, Res])
     (run: (Req, Browser) => IO[Res])
     : Handler = Handler.Serve(
-    endpoint,
+    message,
     (request, _, browser) => run(request, browser),
   )
 
   /**
-    * Answers the requests that the extension's other parts make of `endpoint`,
-    * knowing who made each, such as the tab of a content script.
+    * Answers the requests that the extension's other parts send as `message`,
+    * knowing who sent each, such as the tab of a content script.
     */
   protected final def serve[Req, Res]
-    (endpoint: Endpoint[Req, Res])
+    (message: Message[Req, Res])
     (run: (Req, Sender, Browser) => IO[Res])
-    : Handler = Handler.Serve(endpoint, run)
+    : Handler = Handler.Serve(message, run)

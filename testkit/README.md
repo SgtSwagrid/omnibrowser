@@ -10,8 +10,8 @@
 | The user | `visit(url, text)`, `navigate(tab, url, text)`, `close(tab)`, `openPopup`, `openOptions`, `clickAction`, `answerRequests(grant)` |
 | The user, on a page that `visit` or `openPopup` gave | `click(selector)`, `enter(selector, text)`, `text(selector)`, `value(selector)`, `isChecked(selector)` |
 | The browser | `restart` |
-| A content script | `call(endpoint)(request)` |
-| The background | `call(endpoint, tab)(request)`, `shared(value, tab)` |
+| A content script | `call(message)(request)` |
+| The background | `call(message, tab)(request)`, `shared(value, tab)` |
 | Another device | `store(key, value)` |
 | A check | `stored(key)`, `badge`, `badgeOf(tab)`, `badgeColour`, `badgeColourOf(tab)`, `tabs` |
 

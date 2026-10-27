@@ -2,7 +2,7 @@ package com.alecdorrington.omnibrowser.webext
 
 import cats.effect.{Deferred, IO, Resource}
 import cats.syntax.all.*
-import com.alecdorrington.omnibrowser.{Codec, Endpoint, Shared}
+import com.alecdorrington.omnibrowser.{Codec, Message, Shared}
 import com.alecdorrington.omnibrowser.webext.Interop.promise
 import fs2.concurrent.Signal
 import scala.collection.mutable
@@ -16,13 +16,13 @@ import scala.util.Try
 private[omnibrowser] final class WebExtensionSharing
   (api: RuntimeApi, launch: IO[Unit] => Unit):
 
-  /** Answers the requests of `endpoint` through `run`, while in use. */
+  /** Answers the requests sent as `message` through `run`, while in use. */
   def serve[Req, Res]
-    (endpoint: Endpoint[Req, Res])
+    (message: Message[Req, Res])
     (run: Req => IO[Res])
     : Resource[IO, Unit] = Interop.listening(
     api.onMessage,
-    Messages.listener(endpoint, launch)((request, _) => run(request)),
+    Messages.listener(message, launch)((request, _) => run(request)),
   )
 
   /** Makes `signal` the owner of `shared` in this script's page, while in use. */
@@ -198,7 +198,7 @@ private final class Hub(api: RuntimeApi) extends js.Object:
   /** Answers a request for a value with its owner's value, if it has one. */
   private def asked: MessageListener = (message, _, respond) =>
     Messages
-      .endpoint(message)
+      .name(message)
       .filter(_ == Shared.reading)
       .flatMap(_ => Codec[String].decode(Messages.payload(message)).toOption)
       .flatMap(ownersOf(_).headOption)

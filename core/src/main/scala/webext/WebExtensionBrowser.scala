@@ -25,9 +25,9 @@ private[omnibrowser] final class WebExtensionBrowser
   override def run(program: IO[Unit]): Unit = launch(program)
 
   override def serve[Req, Res]
-    (endpoint: Endpoint.Tab[Req, Res])
+    (message: Message.Tab[Req, Res])
     (run: Req => IO[Res])
-    : Resource[IO, Unit] = sharing.serve(endpoint.endpoint)(run)
+    : Resource[IO, Unit] = sharing.serve(message.message)(run)
 
   override def share[A]
     (shared: Shared.Tab[A])
@@ -56,9 +56,9 @@ private[omnibrowser] final class WebExtensionRuntime
   override def url(path: String): String = api.getURL(path)
 
   override def call[Req, Res]
-    (endpoint: Endpoint[Req, Res])
+    (message: Message[Req, Res])
     (request: Req)
-    : IO[Res] = Messages.exchange(endpoint, request)(api.sendMessage)
+    : IO[Res] = Messages.exchange(message, request)(api.sendMessage)
 
 private[omnibrowser] final class WebExtensionStorage
   (api: StorageApi)
@@ -122,11 +122,11 @@ private[omnibrowser] final class WebExtensionTabs
 
   override def call[Req, Res]
     (
-      endpoint: Endpoint.Tab[Req, Res],
+      message: Message.Tab[Req, Res],
       tab: TabId,
     )
     (request: Req)
-    : IO[Res] = Messages.exchange(endpoint.endpoint, request)(send(tab, _))
+    : IO[Res] = Messages.exchange(message.message, request)(send(tab, _))
 
   override def get[A](shared: Shared.Tab[A], tab: TabId): IO[A] = ask(
     tab,
@@ -179,7 +179,7 @@ private[omnibrowser] final class WebExtensionTabs
   )(emit => (closed: Int, _: js.Any) => emit(closed == tab.toInt))
 
   private def isAnnouncement(message: js.Any): Boolean = Messages
-    .endpoint(message)
+    .name(message)
     .contains(Shared.announcement.name)
 
   /**

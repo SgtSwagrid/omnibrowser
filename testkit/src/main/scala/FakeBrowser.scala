@@ -66,21 +66,22 @@ final class FakeBrowser private (
   /** Restarts the browser profile, as the extension hears of it. */
   def restart: IO[Unit] = act(simulation.startup())
 
-  /** Makes a request of `endpoint`, as a content script would. */
-  def call[Req, Res](endpoint: Endpoint[Req, Res])(request: Req): IO[Res] =
-    tester.runtime.call(endpoint)(request) <* settle
+  /** Sends `request` as `message`, as a content script would. */
+  def call[Req, Res](message: Message[Req, Res])(request: Req): IO[Res] = tester
+    .runtime
+    .call(message)(request) <* settle
 
   /**
-    * Makes a request of the content scripts of `tab` that serve `endpoint`, as
-    * the background would.
+    * Sends `request` as `message` to the content scripts of `tab` that serve
+    * it, as the background would.
     */
   def call[Req, Res]
     (
-      endpoint: Endpoint.Tab[Req, Res],
+      message: Message.Tab[Req, Res],
       tab: TabId,
     )
     (request: Req)
-    : IO[Res] = tester.tabs.call(endpoint, tab)(request) <* settle
+    : IO[Res] = tester.tabs.call(message, tab)(request) <* settle
 
   /** The value of `shared` in `tab`, as the background would see it. */
   def shared[A](shared: Shared.Tab[A], tab: TabId): IO[A] = tester
