@@ -18,12 +18,6 @@ addSbtPlugin("com.alecdorrington" % "sbt-omnibrowser" % "0.5.0")
 
 // build.sbt
 lazy val extension = project.enablePlugins(OmnibrowserPlugin)
-
-// build.sbt, to test it in a fake browser
-libraryDependencies += "com.alecdorrington" %% "omnibrowser-testkit" % omnibrowserVersion.value % Test
-
-// build.sbt, to write pages with Laminar
-libraryDependencies += "com.alecdorrington" %% "omnibrowser-laminar" % omnibrowserVersion.value
 ```
 
 | Module | For |
@@ -115,6 +109,11 @@ Values are JSON, through a `Codec`, which `derives Codec` makes for a case class
 ## 🌿 Laminar
 
 ```scala
+// build.sbt
+libraryDependencies += "com.alecdorrington" %% "omnibrowser-laminar" % omnibrowserVersion.value
+```
+
+```scala
 override def popup() = Some(LaminarPage(browser =>
   div(
     p(child.text <-- browser.signal(total).map(sum => s"$sum words counted.")),
@@ -132,6 +131,11 @@ override def popup() = Some(LaminarPage(browser =>
 | `browser.observer(event => program)` | An `Observer` that runs a program at once |
 
 ## 🧪 Testing
+
+```scala
+// build.sbt
+libraryDependencies += "com.alecdorrington" %% "omnibrowser-testkit" % omnibrowserVersion.value % Test
+```
 
 ```scala
 test("A page's words are added to the total."):
