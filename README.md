@@ -16,7 +16,7 @@
 Add the plugin, which builds the extension, to `project/plugins.sbt`:
 
 ```scala
-addSbtPlugin("com.alecdorrington" % "sbt-omnibrowser" % "0.4.0")
+addSbtPlugin("com.alecdorrington" % "sbt-omnibrowser" % "0.5.0")
 ```
 
 Then enable it in your `build.sbt`:
