@@ -74,10 +74,13 @@ Values are JSON, through a `Codec`, which `derives Codec` makes for a case class
 | `serve`, `share` in a content script | Each is a `Resource`, in use while the script serves or shares. A request of a tab where nothing serves it fails. |
 | `share` | If several content scripts of a page share a value, the one that began last owns it, until it stops. |
 | `tabs.values` | It follows its tab to each page it loads, even one whose content script starts late or returns from the back-forward cache, and ends when the tab closes. |
-| `tabs.values` in the background | Chrome may stop a background that only watches, so watch from a page, such as the popup. |
+| `tabs.values` in the background | Chromium may stop a background that only watches, so watch from a page, such as the popup. |
 | `tabs.values` in Firefox | Firefox may keep a port to a page in its back-forward cache open, so a watcher sees that page's last value until it returns. |
 | `grants.request` | The browser asks the user only in response to their input, so start it from a DOM event handler with `browser.run`, which runs it at once. |
-| `StorageKey.sync` | Firefox for Android keeps its values on that device only. |
+| `StorageKey.sync` | Firefox for Android and Safari keep its values on that device only. |
+| `contentScripts()` in Safari | Safari runs them on a site only once the user grants the extension access to it, from its toolbar button. |
+| `setBadgeColour` in Safari | Safari keeps its own colour. |
+| `options()` in Safari | Safari opens the options page in a tab of its own. |
 | `android` | The build warns of each permission that the extension asks for and Firefox for Android lacks. |
 | Names | Messages and values whose names begin `omnibrowser/` are the library's own. |
 

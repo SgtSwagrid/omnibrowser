@@ -34,8 +34,8 @@ private[omnibrowser] object Describe:
       build: Build,
     )
     : Seq[String] = build.target match
-    case Target.Firefox => AndroidSupport.warnings(extension)
-    case Target.Chrome  => Seq.empty
+    case Target.Firefox                  => AndroidSupport.warnings(extension)
+    case Target.Chromium | Target.Safari => Seq.empty
 
   /**
     * The files, by path, that make the bundle of `extension`, the object named
@@ -64,14 +64,14 @@ private[omnibrowser] object Describe:
     ))
 
   /**
-    * The background's bootstrap. Chrome's background is a service worker of a
-    * single script, which must load the bundle itself, whereas Firefox loads
-    * the bundle after it.
+    * The background's bootstrap. Chromium's and Safari's background is a
+    * service worker of a single script, which must load the bundle itself,
+    * whereas Firefox loads the bundle after it.
     */
   private def backgroundScript(name: String, target: Target): String =
     val bootstrap = Bootstrap.script(Bootstrap(name, Role.Background))
     target match
-      case Target.Chrome => bootstrap +
+      case Target.Chromium | Target.Safari => bootstrap +
           s"importScripts(\"${ Layout.bundle }\");\n"
       case Target.Firefox => bootstrap
 

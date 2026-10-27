@@ -75,7 +75,7 @@ extension [B <: ContentBrowser](browser: B)
 
   /**
     * The value of `shared` in `tab`, as a page sees it (or the background,
-    * though Chrome may stop it meanwhile, as [[Browser.Tabs.values]] says),
+    * though Chromium may stop it meanwhile, as [[Browser.Tabs.values]] says),
     * while anything observes the signal: its default whenever nothing there
     * shares it, as before a content script there begins sharing it, after it
     * stops, or while the tab loads another page, and otherwise the value that

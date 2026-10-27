@@ -47,7 +47,7 @@ private[omnibrowser] object Interop:
     * The messages that the port `open` opens is sent, until it is disconnected,
     * which it is once the stream ends. It is opened along with its listeners,
     * so that they hear of everything that it is sent. Its failure to connect is
-    * read from `runtime`, as Chrome reports it as an error otherwise.
+    * read from `runtime`, as Chromium reports it as an error otherwise.
     */
   def port(open: => PortApi, runtime: RuntimeApi): Stream[IO, js.Any] =
     for

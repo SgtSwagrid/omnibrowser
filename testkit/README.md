@@ -27,7 +27,7 @@ test("A page's words are added to the total."):
 | | Runs | Each page, given jsdom |
 | --- | --- | --- |
 | `FakeBrowser.install(extension)` | The extension's code, within the test | A document of one shared window |
-| `FakeBrowser.installBuilt(Target.Chrome)` | The extension as the [plugin](../sbt-omnibrowser) built it for that browser, each part in a sandbox of its own | A window of its own, from the HTML that the plugin wrote |
+| `FakeBrowser.installBuilt(Target.Chromium)` | The extension as the [plugin](../sbt-omnibrowser) built it for that browser, each part in a sandbox of its own | A window of its own, from the HTML that the plugin wrote |
 
 | Acting as | `browser.` |
 | --- | --- |

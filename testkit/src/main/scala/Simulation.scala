@@ -85,8 +85,9 @@ private[testkit] final class Simulation(runner: Runner, activity: Activity):
 
   /** Where the extension's files are, as URLs. */
   def origin: String = runner.target match
-    case Target.Chrome  => s"chrome-extension://${ Simulation.id }"
-    case Target.Firefox => s"moz-extension://${ Simulation.id }"
+    case Target.Chromium => s"chrome-extension://${ Simulation.id }"
+    case Target.Firefox  => s"moz-extension://${ Simulation.id }"
+    case Target.Safari   => s"safari-web-extension://${ Simulation.id }"
 
   /** A new context of `kind`. */
   def context(kind: Kind): FakeContext =
@@ -172,14 +173,14 @@ private[testkit] final class Simulation(runner: Runner, activity: Activity):
 
   /**
     * Delivers `message` from `sender` to each of the extension's own contexts,
-    * after serialising it as JSON, as Chrome does.
+    * after serialising it as JSON, as Chromium does.
     */
   def deliver(sender: FakeContext, message: js.Any): js.Promise[js.Any] =
     send(sender, receivers(sender), message)
 
   /**
     * Delivers `message` from `sender` to the content scripts of `tab`, after
-    * serialising it as JSON, as Chrome does.
+    * serialising it as JSON, as Chromium does.
     */
   def deliver
     (
@@ -464,7 +465,7 @@ private[testkit] final class Simulation(runner: Runner, activity: Activity):
   /**
     * Closes both ends of a port that reached nothing, of which `near` hears,
     * unless its own side has closed it already, failing if `sender` does not
-    * read why, as Chrome reports it as an error otherwise.
+    * read why, as Chromium reports it as an error otherwise.
     */
   private def refuse
     (

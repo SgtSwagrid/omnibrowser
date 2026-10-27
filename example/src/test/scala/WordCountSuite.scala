@@ -22,7 +22,7 @@ class WordCountSuite extends FunSuite:
 
   test("The extension has a background, a content script and a popup."):
     assertEquals(
-      files(Target.Chrome).keySet,
+      files(Target.Chromium).keySet,
       Set(
         "manifest.json",
         "background.js",
@@ -40,7 +40,7 @@ class WordCountSuite extends FunSuite:
     )
 
   test("Each bootstrap names the extension."):
-    files(Target.Chrome)
+    files(Target.Chromium)
       .removed("manifest.json")
       .removed("popup.html")
       .values
@@ -51,7 +51,7 @@ class WordCountSuite extends FunSuite:
     val directory = process.env.selectDynamic(FakeBrowser.buildVariable)
     val fs        = process.getBuiltinModule("fs")
     def size(bundle: String): Double = fs
-      .statSync(s"$directory/${ Target.Chrome.id }/$bundle")
+      .statSync(s"$directory/${ Target.Chromium.id }/$bundle")
       .size
       .asInstanceOf[Double]
     assert(size("omnibrowser-content.js") < size("omnibrowser.js"))
