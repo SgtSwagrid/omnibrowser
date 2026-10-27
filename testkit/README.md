@@ -18,4 +18,10 @@
 Each action waits until the extension has finished responding to it, and fails if the extension failed.
 Pages have a DOM if the tests can load [jsdom](https://github.com/jsdom/jsdom) from `node_modules`.
 
-The plugin adds it to an extension's tests. See [Testing](../README.md#-testing) in the main README.
+It is published apart from the core library, which is all that the [plugin](../sbt-omnibrowser) adds, so add it to your tests yourself:
+
+```scala
+libraryDependencies += "com.alecdorrington" %% "omnibrowser-testkit" % omnibrowserVersion.value % Test
+```
+
+See [Testing](../README.md#-testing) in the main README.

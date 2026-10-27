@@ -47,7 +47,7 @@ This is a Scala library for writing browser extensions against a typed model of 
 - Laminar is at a milestone, 18.0.0-M5, the latest on GitHub when it was added.
 
 - The plugin's sources are also compiled into the build definition (`project/plugins-omnibrowser.sbt`), so the build can use its own plugin. A broken plugin breaks loading the build, and the plugin must compile with sbt's own Scala version (3.8.4).
-- The published plugin adds `omnibrowser-core` and `omnibrowser-testkit` at the version in its jar's manifest (`PluginVersion`). Compiled into this build's definition it has none, so it adds nothing, and the example depends on the projects directly.
+- The published plugin adds only `omnibrowser-core`, at the version in its jar's manifest (`PluginVersion`): the testkit and `omnibrowser-laminar` are published apart, and an extension adds them itself at `omnibrowserVersion`. Compiled into this build's definition it has no version, so it adds nothing, and the example depends on the projects directly.
 - In sbt 2, a task returning `File` must have its key marked `@transient`, or be wrapped in `Def.uncached`.
 - An extension's parts are methods (`def background()`, `contentScripts()`, `popup()`, `options()`) so that the content bundle reaches only `contentScripts()` and the object's own vals. Never make them vals (Scala 3 rejects a `val` overriding them anyway), and keep `launch.Bootstrap.startContent` from reaching the other parts.
 - A `/*` in a comment, as in a match pattern like `https://*/*`, opens a nested comment in Scala.

@@ -24,7 +24,7 @@ lazy val extension = project.enablePlugins(OmnibrowserPlugin)
 | --- | --- | --- |
 | [`sbt-omnibrowser`](sbt-omnibrowser) | Building for Chrome and Firefox | You |
 | [`omnibrowser-core`](core) | Writing the extension | The plugin |
-| [`omnibrowser-testkit`](testkit) | Testing it in a fake browser | The plugin |
+| [`omnibrowser-testkit`](testkit) | Testing it in a fake browser | You: `"com.alecdorrington" %% "omnibrowser-testkit" % omnibrowserVersion.value % Test` |
 | [`omnibrowser-laminar`](laminar) | Writing its pages with [Laminar](https://laminar.dev) | You: `"com.alecdorrington" %% "omnibrowser-laminar" % omnibrowserVersion.value` |
 
 ## 🚀 Usage
