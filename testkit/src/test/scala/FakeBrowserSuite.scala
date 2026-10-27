@@ -63,6 +63,32 @@ class FakeBrowserSuite extends CatsEffectSuite:
       assertEquals(before, "first")
       assertEquals(after, "synced, elsewhere")
 
+  test("A stored value that cannot be decoded is its default until set again."):
+    for
+      browser <- FakeBrowser.install(Probe)
+      _       <- browser.store(Probe.misstored, "not a list")
+      before  <- browser.stored(Probe.seen)
+      _       <- browser.visit("https://example.com/", "first")
+      after   <- browser.stored(Probe.seen)
+    yield
+      assertEquals(before, Nil)
+      assertEquals(after, List("first"))
+
+  test("A page goes on watching a value after one that cannot be decoded."):
+    for
+      browser <- FakeBrowser.install(Probe)
+      popup   <- browser.openPopup
+      _       <- browser.store(Probe.seen, List("synced"))
+      before  <- popup.text
+      _       <- browser.store(Probe.misstored, "not a list")
+      invalid <- popup.text
+      _       <- browser.store(Probe.seen, List("again"))
+      after   <- popup.text
+    yield assertEquals(
+      (before, invalid, after),
+      ("synced", "", "again"),
+    )
+
   test("An extension without the page asked for cannot open it."):
     FakeBrowser
       .install(Probe)
@@ -109,6 +135,9 @@ object Probe extends BrowserExtension[Storage]:
 
   /** The text of each page visited, most recent first. */
   val seen = StorageKey.local[List[String]]("seen", Nil)
+
+  /** A value stored under [[seen]]'s name, which [[seen]] cannot decode. */
+  val misstored = StorageKey.local[String]("seen", "")
 
   /** A value that content scripts may not see. */
   val secret = StorageKey.session[String]("secret", "")

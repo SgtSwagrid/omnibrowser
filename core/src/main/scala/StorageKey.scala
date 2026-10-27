@@ -23,7 +23,9 @@ enum StorageArea(private[omnibrowser] val id: String):
 /**
   * A value that the extension keeps in the browser's storage, under `name` in
   * `area`, which is `default` until it is first set. Its value is kept as JSON,
-  * through circe's codecs.
+  * through circe's codecs. A stored value that they cannot decode, as one that
+  * an earlier version stored differently, is `default` until it is set again,
+  * and the browser's console warns of it.
   */
 final class StorageKey[A : {Encoder, Decoder}]
   (
@@ -48,7 +50,3 @@ object StorageKey:
   /** A value kept in memory until the browser closes. */
   def session[A : {Encoder, Decoder}](name: String, default: A): StorageKey[A] =
     StorageKey(StorageArea.Session, name, default)
-
-/** A stored value of the key named `key`, which its decoder cannot decode. */
-final case class StorageError(key: String, reason: String)
-  extends Exception(s"The stored value of $key is invalid: $reason")
