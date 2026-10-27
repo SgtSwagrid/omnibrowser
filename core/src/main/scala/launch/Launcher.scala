@@ -2,12 +2,10 @@ package com.alecdorrington.omnibrowser.launch
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import cats.syntax.all.*
 import com.alecdorrington.omnibrowser.*
 import com.alecdorrington.omnibrowser.webext.{
   MessageListener, Messages, WebExtensionApi, WebExtensionTabs,
 }
-import scala.scalajs.js
 
 /**
   * Starts each part of an extension in the browser, starting each program that
@@ -32,7 +30,7 @@ private[omnibrowser] final class Launcher(val launch: IO[Unit] => Unit):
   def contentScript
     (
       script: ContentScript,
-      browser: ContentBrowser,
+      browser: TabBrowser,
     )
     : Unit = launch(script.run(browser))
 
@@ -70,37 +68,8 @@ private[omnibrowser] final class Launcher(val launch: IO[Unit] => Unit):
       serve: Handler.Serve[Req, Res],
       browser: => Browser,
     )
-    : MessageListener = (message, sender, respond) =>
-    val mine = Messages.endpoint(message).contains(serve.endpoint.name)
-    if mine then
-      launch(
-        answer(
-          serve,
-          browser,
-          Messages.payload(message),
-          Messages.sender(sender),
-        ).map(respond(_)),
-      )
-    mine
-
-  private def answer[Req, Res]
-    (
-      serve: Handler.Serve[Req, Res],
-      browser: Browser,
-      request: js.Any,
-      sender: Sender,
-    )
-    : IO[js.Any] = IO
-    .fromEither(
-      serve
-        .endpoint
-        .request
-        .decode(request)
-        .leftMap(MessagingError(serve.endpoint.name, _)),
-    )
-    .flatMap(serve.run(_, sender, browser))
-    .map(response => Messages.success(serve.endpoint.response.encode(response)))
-    .handleError(error => Messages.failure(error.getMessage))
+    : MessageListener =
+    Messages.listener(serve.endpoint, launch)(serve.run(_, _, browser))
 
 private[omnibrowser] object Launcher:
 

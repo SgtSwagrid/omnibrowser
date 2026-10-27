@@ -4,11 +4,13 @@ import com.alecdorrington.omnibrowser.*
 import com.alecdorrington.omnibrowser.Permission.Storage
 import com.alecdorrington.omnibrowser.laminar.*
 import com.raquo.laminar.api.L.*
+import fs2.concurrent.Signal.constant
 import org.scalajs.dom.document
 
 /**
   * Counts the words on each page that the user visits, and shows how many it
-  * has counted in all, until the user resets the count.
+  * has counted in all, until the user resets the count, and how many the page
+  * in the active tab has.
   */
 object WordCount extends BrowserExtension[Storage]:
 
@@ -24,6 +26,9 @@ object WordCount extends BrowserExtension[Storage]:
 
   /** How many words have been counted in all. */
   val total = StorageKey.local[Int]("total", 0)
+
+  /** How many words a tab's page has, which its content script shares. */
+  val words = Shared.tab[Int]("words", 0)
 
   /** A word, of letters and numbers in any script, as in `héllo` or `привет`. */
   private val word = """[\p{L}\p{N}']+""".r
@@ -42,13 +47,25 @@ object WordCount extends BrowserExtension[Storage]:
   )
 
   override def contentScripts() = Seq(ContentScript("https://*/*")(browser =>
-    browser.runtime.call(count)(document.body.innerText).void,
+    browser
+      .runtime
+      .call(count)(document.body.innerText)
+      .flatMap(counted => browser.share(words)(constant(counted)).useForever),
   ))
 
   override def popup() = Some(LaminarPage(browser =>
     div(
       p(
         child.text <-- browser.signal(total).map(sum => s"$sum words counted."),
+      ),
+      p(
+        cls := "page",
+        child.text <--
+          browser
+            .events(browser.tabs.active)
+            .collect { case Some(tab) => tab.id }
+            .flatMapSwitch(browser.signal(words, _))
+            .map(counted => s"$counted on this page."),
       ),
       button(
         "Reset",

@@ -1,9 +1,7 @@
 package com.alecdorrington.omnibrowser.laminar
 
 import cats.effect.IO
-import com.alecdorrington.omnibrowser.{
-  Browser, ContentBrowser, ContentScript, Page,
-}
+import com.alecdorrington.omnibrowser.{Browser, ContentScript, Page, TabBrowser}
 import com.raquo.laminar.api.L.{render, HtmlElement}
 import org.scalajs.dom.document
 
@@ -30,7 +28,7 @@ object LaminarContentScript:
     */
   def apply
     (matches: String*)
-    (content: ContentBrowser => HtmlElement)
+    (content: TabBrowser => HtmlElement)
     : ContentScript =
     ContentScript(matches*)(browser => renderInBody(content(browser)))
 

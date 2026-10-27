@@ -1,24 +1,40 @@
 package com.alecdorrington.omnibrowser.webext
 
-import cats.effect.IO
+import cats.Eq
+import cats.effect.{IO, Resource}
 import cats.syntax.all.*
 import com.alecdorrington.omnibrowser.*
 import com.alecdorrington.omnibrowser.webext.Interop.{events, promise}
 import fs2.Stream
+import fs2.concurrent.Signal
 import scala.scalajs.js
 
 /**
   * The browser, through the WebExtensions API, which starts the programs that
-  * the extension runs with `launch`.
+  * the extension runs with `launch`. It is what every part sees, though only a
+  * content script sees it as a [[TabBrowser]], and only the background and
+  * pages as a [[Browser]].
   */
 private[omnibrowser] final class WebExtensionBrowser
   (
     api: WebExtensionApi,
     launch: IO[Unit] => Unit,
   )
-  extends Browser:
+  extends Browser, TabBrowser:
 
   override def run(program: IO[Unit]): Unit = launch(program)
+
+  override def serve[Req, Res]
+    (endpoint: Endpoint.Tab[Req, Res])
+    (run: Req => IO[Res])
+    : Resource[IO, Unit] = sharing.serve(endpoint.endpoint)(run)
+
+  override def share[A]
+    (shared: Shared.Tab[A])
+    (signal: Signal[IO, A])
+    : Resource[IO, Unit] = sharing.share(shared, signal)
+
+  private lazy val sharing = WebExtensionSharing(api.runtime, launch)
 
   override lazy val grants: Browser.Grants = WebExtensionGrants(api.permissions)
 
@@ -27,7 +43,7 @@ private[omnibrowser] final class WebExtensionBrowser
   override def storage(using Granted[Permission.Storage]): Browser.Storage =
     WebExtensionStorage(api.storage)
 
-  override lazy val tabs: Browser.Tabs = WebExtensionTabs(api.tabs)
+  override lazy val tabs: Browser.Tabs = WebExtensionTabs(api.tabs, api.runtime)
 
   override lazy val action: Browser.Action = WebExtensionAction(api.action)
 
@@ -42,11 +58,7 @@ private[omnibrowser] final class WebExtensionRuntime
   override def call[Req, Res]
     (endpoint: Endpoint[Req, Res])
     (request: Req)
-    : IO[Res] = promise(api.sendMessage(Messages.request(endpoint, request)))
-    .adaptError { case js.JavaScriptException(error) =>
-      MessagingError(endpoint.name, error.toString)
-    }
-    .flatMap(Messages.response(endpoint, _))
+    : IO[Res] = Messages.exchange(endpoint, request)(api.sendMessage)
 
 private[omnibrowser] final class WebExtensionStorage
   (api: StorageApi)
@@ -91,8 +103,12 @@ private[omnibrowser] final class WebExtensionStorage
         .leftMap(StorageError(key.name, _)),
     )
 
+/**
+  * The browser's tabs, through `api`, and through `runtime` the announcements
+  * of the pages in them that begin sharing values.
+  */
 private[omnibrowser] final class WebExtensionTabs
-  (api: TabsApi)
+  (api: TabsApi, runtime: RuntimeApi)
   extends Browser.Tabs:
 
   override def all: IO[List[Tab]] = query(js.Dynamic.literal())
@@ -104,10 +120,101 @@ private[omnibrowser] final class WebExtensionTabs
   override def open(url: String): IO[Tab] =
     promise(api.create(js.Dynamic.literal(url = url))).map(WebExtensionTabs.tab)
 
+  override def call[Req, Res]
+    (
+      endpoint: Endpoint.Tab[Req, Res],
+      tab: TabId,
+    )
+    (request: Req)
+    : IO[Res] = Messages.exchange(endpoint.endpoint, request)(send(tab, _))
+
+  override def get[A](shared: Shared.Tab[A], tab: TabId): IO[A] = ask(
+    tab,
+    Messages.request(shared.reading, shared.name),
+  ).flatMap(_.traverse(Messages.response(shared.reading, _)))
+    .adaptError { case MessagingError(_, reason) =>
+      MessagingError(shared.name, reason)
+    }
+    .map(_.getOrElse(shared.default))
+
+  override def values[A](shared: Shared.Tab[A], tab: TabId): Stream[IO, A] =
+    (Interop
+      .eventsFrom(())(runtime.onMessage)(announced(tab))
+      .switchMap(_ => watch(shared, tab))
+      .interruptWhen(closing(tab)) ++ Stream.emit(shared.default)).changes(
+      using Eq.fromUniversalEquals,
+    )
+
   private def query(info: js.Object): IO[List[Tab]] = promise(api.query(info))
     .map(_.toList.map(WebExtensionTabs.tab))
 
+  /**
+    * The value of `shared` in the page now in `tab`, then each new value, until
+    * the page goes, and then its default.
+    */
+  private def watch[A](shared: Shared.Tab[A], tab: TabId): Stream[IO, A] =
+    Interop
+      .port(
+        api.connect(tab.toInt, connection(shared.name)),
+        runtime,
+      )
+      .evalMap(Messages.watched(shared, _))
+      .map(_.getOrElse(shared.default)) ++ Stream.emit(shared.default)
+
+  /**
+    * A listener that gives `emit` nothing each time that the page in `tab`
+    * announces that it has begun sharing values, and leaves every message to
+    * the other listeners.
+    */
+  private def announced(tab: TabId)(emit: Unit => Unit): MessageListener =
+    (message, sender, _) =>
+      if isAnnouncement(message) &&
+        Messages.sender(sender).tab.exists(_.id == tab)
+      then emit(())
+      false
+
+  /** Whether each tab that closes is `tab`, which ends a watch of it. */
+  private def closing(tab: TabId): Stream[IO, Boolean] = Interop.events(
+    api.onRemoved,
+  )(emit => (closed: Int, _: js.Any) => emit(closed == tab.toInt))
+
+  private def isAnnouncement(message: js.Any): Boolean = Messages
+    .endpoint(message)
+    .contains(Shared.announcement.name)
+
+  /**
+    * The answer to `message` from the content scripts of `tab`, if any answered
+    * it. Where it reaches nothing, as where there are none, none answered it.
+    */
+  private def ask(tab: TabId, message: js.Any): IO[Option[js.Any]] =
+    promise(send(tab, message)).redeem(
+      _ => None,
+      Option(_).filter(Messages.isAnswer),
+    )
+
+  /** Sends `message` to the content scripts of `tab`'s page. */
+  private def send(tab: TabId, message: js.Any): js.Promise[js.Any] = api
+    .sendMessage(
+      tab.toInt,
+      message,
+      WebExtensionTabs.page,
+    )
+
+  /** How to connect a port that watches `name` to a page's content scripts. */
+  private def connection(name: String): js.Object = js
+    .Object
+    .assign(
+      js.Dynamic.literal(name = Shared.port(name)),
+      WebExtensionTabs.page,
+    )
+
 private[omnibrowser] object WebExtensionTabs:
+
+  /**
+    * The options of a message or port to a tab that reach only the content
+    * scripts of its page, rather than those of the frames within it.
+    */
+  def page: js.Object = js.Dynamic.literal(frameId = 0)
 
   /** The tab that the API describes as `tab`. */
   def tab(tab: TabApi): Tab = Tab(

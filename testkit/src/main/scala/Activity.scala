@@ -1,7 +1,8 @@
 package com.alecdorrington.omnibrowser.testkit
 
 import cats.effect.IO
-import cats.effect.unsafe.implicits.global
+import cats.effect.unsafe.IORuntime
+import scala.concurrent.ExecutionContext
 
 /** A moment's account of what an extension is doing in a [[FakeBrowser]]. */
 private[testkit] final case class Status
@@ -19,8 +20,22 @@ private[testkit] final case class Status
 private[testkit] final class Activity:
 
   private var pending  = 0
+  private var queued   = 0
   private var events   = 0
   private var failures = Vector.empty[Throwable]
+
+  /**
+    * The runtime of the extension's programs, which counts each step that it
+    * has yet to run, so that the extension is busy until it has run them, as
+    * between a program's start and its first message.
+    */
+  private val runtime: IORuntime =
+    val compute = Counted(IORuntime.global.compute, this)
+    IORuntime
+      .builder()
+      .setCompute(compute, () => ())
+      .setBlocking(compute, () => ())
+      .build()
 
   /** Starts `program` without waiting, recording any failure. */
   def launch(program: IO[Unit]): Unit =
@@ -28,7 +43,7 @@ private[testkit] final class Activity:
     program
       .handleErrorWith(error => IO(fail(error)))
       .guarantee(IO(touch()))
-      .unsafeRunAndForget()
+      .unsafeRunAndForget()(using runtime)
 
   /** Records that a message awaits its response. */
   def await(): Unit =
@@ -40,6 +55,16 @@ private[testkit] final class Activity:
     pending -= 1
     touch()
 
+  /** Records that a step of the extension's programs is waiting to run. */
+  def queue(): Unit =
+    queued += 1
+    touch()
+
+  /** Records that a step of the extension's programs has run. */
+  def ran(): Unit =
+    queued -= 1
+    touch()
+
   /** Records that the extension did something. */
   def touch(): Unit = events += 1
 
@@ -47,7 +72,28 @@ private[testkit] final class Activity:
   def fail(error: Throwable): Unit = failures :+= error
 
   /** What the extension is doing now. */
-  def status: Status = Status(pending == 0, events, failures)
+  def status: Status = Status(pending == 0 && queued == 0, events, failures)
 
   /** Forgets the failures recorded so far, once they have been reported. */
   def forgetFailures(): Unit = failures = Vector.empty
+
+/**
+  * `underlying`, which tells `activity` of each task that it has yet to run,
+  * and of each that it has run.
+  */
+private final class Counted
+  (
+    underlying: ExecutionContext,
+    activity: Activity,
+  )
+  extends ExecutionContext:
+
+  override def execute(task: Runnable): Unit =
+    activity.queue()
+    underlying.execute(() =>
+      try task.run()
+      finally activity.ran(),
+    )
+
+  override def reportFailure(cause: Throwable): Unit =
+    underlying.reportFailure(cause)

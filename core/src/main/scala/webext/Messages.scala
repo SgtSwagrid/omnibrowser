@@ -2,14 +2,55 @@ package com.alecdorrington.omnibrowser.webext
 
 import cats.effect.IO
 import cats.syntax.all.*
-import com.alecdorrington.omnibrowser.{Codec, Endpoint, MessagingError, Sender}
+import com.alecdorrington.omnibrowser.{
+  Codec, Endpoint, MessagingError, Sender, Shared,
+}
+import com.alecdorrington.omnibrowser.webext.Interop.promise
 import scala.scalajs.js
 
 /**
   * The messages through which an extension's parts make requests of each other,
-  * which the browser serialises as JSON.
+  * and share values with each other, which the browser serialises as JSON.
   */
 private[omnibrowser] object Messages:
+
+  /**
+    * Makes the request `request` of `endpoint`, sending it through `send`, and
+    * gives the response.
+    */
+  def exchange[Req, Res]
+    (
+      endpoint: Endpoint[Req, Res],
+      request: Req,
+    )
+    (send: js.Any => js.Promise[js.Any])
+    : IO[Res] = promise(send(Messages.request(endpoint, request)))
+    .adaptError { case js.JavaScriptException(error) =>
+      MessagingError(endpoint.name, error.toString)
+    }
+    .flatMap(response(endpoint, _))
+
+  /**
+    * A listener that answers the requests of `endpoint` through `run`, which
+    * `launch` starts, and leaves every other message to the other listeners.
+    */
+  def listener[Req, Res]
+    (
+      endpoint: Endpoint[Req, Res],
+      launch: IO[Unit] => Unit,
+    )
+    (run: (Req, Sender) => IO[Res])
+    : MessageListener = (message, sender, respond) =>
+    val mine = Messages.endpoint(message).contains(endpoint.name)
+    if mine then
+      launch(
+        answer(
+          endpoint,
+          payload(message),
+          Messages.sender(sender),
+        )(run).map(respond(_)),
+      )
+    mine
 
   /** A request of `endpoint`. */
   def request[Req, Res]
@@ -51,6 +92,10 @@ private[omnibrowser] object Messages:
   /** A response saying why a request failed. */
   def failure(error: String): js.Any = js.Dynamic.literal(error = error)
 
+  /** Whether `message` answers a request, as no response does if none came. */
+  def isAnswer(message: js.Any): Boolean = hasField(message, "response") ||
+    hasField(message, "error")
+
   /** The response that `message` holds to a request of `endpoint`. */
   def response[Req, Res]
     (
@@ -61,22 +106,68 @@ private[omnibrowser] object Messages:
     decode(endpoint.response, message).leftMap(MessagingError(endpoint.name, _)),
   )
 
+  /** A message through a port, holding a new value. */
+  def value(json: js.Any): js.Any = js.Dynamic.literal(value = json)
+
+  /** A message through a port, saying that nothing shares its value now. */
+  def unshared: js.Any = js.Dynamic.literal(unshared = true)
+
+  /**
+    * The value of `shared` that `message`, from a port, holds, or nothing if it
+    * says that nothing shares it.
+    */
+  def watched[A](shared: Shared.Tab[A], message: js.Any): IO[Option[A]] = IO
+    .fromEither(
+      field(message, "value")
+        .map(shared.codec.decode(_).map(Some(_)))
+        .orElse(Option.when(hasField(message, "unshared"))(Right(None)))
+        .getOrElse(Left("The message holds no value."))
+        .leftMap(MessagingError(shared.name, _)),
+    )
+
+  private def answer[Req, Res]
+    (
+      endpoint: Endpoint[Req, Res],
+      request: js.Any,
+      sender: Sender,
+    )
+    (run: (Req, Sender) => IO[Res])
+    : IO[js.Any] = IO
+    .fromEither(
+      endpoint.request.decode(request).leftMap(MessagingError(endpoint.name, _)),
+    )
+    .flatMap(run(_, sender))
+    .map(response => success(endpoint.response.encode(response)))
+    .handleError(error => failure(reason(error)))
+
+  /**
+    * Why `error` happened: a messaging error's reason, or else what its message
+    * says, or else its name.
+    */
+  def reason(error: Throwable): String = error match
+    case MessagingError(_, reason) => reason
+    case other => Option(other.getMessage).getOrElse(other.toString)
+
   private def decode[Res]
     (codec: Codec[Res], message: js.Any)
     : Either[String, Res] =
     (field(message, "response"), field(message, "error")) match
       case (Some(response), _) => codec.decode(response)
-      case (None, Some(error)) => Left(error.toString)
+      case (None, Some(error)) => Left(stated(error))
       case (None, None)        => Left("Nothing in the extension serves it.")
 
+  /** Why a request failed, as its response says. */
+  private def stated(error: js.Any): String =
+    if Codec.isNull(error) then "It failed for no stated reason."
+    else error.toString
+
   private def field(message: js.Any, name: String): Option[js.Any] = Option
-    .when(isObject(message) && hasField(message, name))(
+    .when(hasField(message, name))(
       message.asInstanceOf[js.Dynamic].selectDynamic(name),
     )
 
   private def isObject(message: js.Any): Boolean =
     js.typeOf(message) == "object" && message != null
 
-  private def hasField(message: js.Any, name: String): Boolean = message
-    .asInstanceOf[js.Object]
-    .hasOwnProperty(name)
+  private def hasField(message: js.Any, name: String): Boolean =
+    isObject(message) && message.asInstanceOf[js.Object].hasOwnProperty(name)

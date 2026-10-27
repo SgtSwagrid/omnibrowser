@@ -36,6 +36,21 @@ final class FakeBrowser private (
     simulation.openTab(url, text),
   ).map((tab, document) => FakePage(document, Some(TabId(tab.id)), settle))
 
+  /** Closes `tab`, as the user would. */
+  def close(tab: TabId): IO[Unit] = act(simulation.close(tab.toInt))
+
+  /**
+    * Has `tab` load `url` showing `text`, as on following a link, in place of
+    * its page, into which the browser injects each of the extension's content
+    * scripts that match it.
+    */
+  def navigate(tab: TabId, url: String, text: String = ""): IO[FakePage] = act(
+    simulation.navigate(tab.toInt, url, text),
+  ).map(FakePage(_, Some(tab), settle))
+
+  /** How many ports are open, for the testkit's own tests. */
+  private[testkit] def openPorts: IO[Int] = IO(simulation.openPorts)
+
   /** Opens the extension's popup. */
   def openPopup: IO[FakePage] = openPage(PageKind.Popup)
 
@@ -54,6 +69,23 @@ final class FakeBrowser private (
   /** Makes a request of `endpoint`, as a content script would. */
   def call[Req, Res](endpoint: Endpoint[Req, Res])(request: Req): IO[Res] =
     tester.runtime.call(endpoint)(request) <* settle
+
+  /**
+    * Makes a request of the content scripts of `tab` that serve `endpoint`, as
+    * the background would.
+    */
+  def call[Req, Res]
+    (
+      endpoint: Endpoint.Tab[Req, Res],
+      tab: TabId,
+    )
+    (request: Req)
+    : IO[Res] = tester.tabs.call(endpoint, tab)(request) <* settle
+
+  /** The value of `shared` in `tab`, as the background would see it. */
+  def shared[A](shared: Shared.Tab[A], tab: TabId): IO[A] = tester
+    .tabs
+    .get(shared, tab) <* settle
 
   /** The stored value of `key`. */
   def stored[A](key: StorageKey[A]): IO[A] = IO(
@@ -258,6 +290,13 @@ final case class NoDom()
   extends Exception(
     "The page has no DOM, as the tests could not load jsdom. Install it with `npm install --save-dev jsdom`.",
   )
+
+/**
+  * The extension did not read `runtime.lastError` while a listener heard of the
+  * failure `reason`, which Chrome reports as an error.
+  */
+final case class UncheckedError(reason: String)
+  extends Exception(s"Unchecked runtime.lastError: $reason")
 
 /** The extension was still busy when the test gave up waiting for it. */
 final case class Unsettled()

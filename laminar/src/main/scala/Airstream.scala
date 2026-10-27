@@ -1,10 +1,13 @@
 package com.alecdorrington.omnibrowser.laminar
 
 import cats.effect.{Deferred, IO}
-import com.alecdorrington.omnibrowser.{ContentBrowser, Granted, StorageKey}
+import com.alecdorrington.omnibrowser.{
+  Browser, ContentBrowser, Granted, Shared, StorageKey, TabId,
+}
 import com.alecdorrington.omnibrowser.Permission.Storage
 import com.raquo.laminar.api.L.{EventStream, Observer, Signal}
 import fs2.Stream
+import scala.annotation.implicitNotFound
 
 extension (browser: ContentBrowser)
 
@@ -25,13 +28,6 @@ extension (browser: ContentBrowser)
     * stream starts.
     */
   def events[A](program: IO[A]): EventStream[A] = events(Stream.eval(program))
-
-  /**
-    * The value of `key`, which is its default until it has been read, then each
-    * new value that it is given, while anything observes the signal.
-    */
-  def signal[A](key: StorageKey[A])(using Granted[Storage]): Signal[A] =
-    events(browser.storage.values(key)).toSignal(key.default)
 
   /** Gives `key` each value that the observer observes. */
   def writer[A](key: StorageKey[A])(using Granted[Storage]): Observer[A] =
@@ -60,6 +56,56 @@ extension (browser: ContentBrowser)
     */
   def observer[A](program: A => IO[Unit]): Observer[A] =
     Observer(value => browser.run(program(value)))
+
+// Scala chooses among overloads by their receivers before their arguments, so
+// both of `signal`'s overloads have one receiver, the tab's asking that it be
+// the background's or a page's.
+extension [B <: ContentBrowser](browser: B)
+
+  /**
+    * The value of `key`, which is its default until it has been read, then each
+    * new value that it is given, while anything observes the signal.
+    */
+  def signal[A](key: StorageKey[A])(using Granted[Storage]): Signal[A] =
+    signalOf(
+      browser,
+      browser.storage.values(key),
+      key.default,
+    )
+
+  /**
+    * The value of `shared` in `tab`, as a page sees it (or the background,
+    * though Chrome may stop it meanwhile, as [[Browser.Tabs.values]] says),
+    * while anything observes the signal: its default whenever nothing there
+    * shares it, as before a content script there begins sharing it, after it
+    * stops, or while the tab loads another page, and otherwise the value that
+    * the content script shares, then each new value.
+    */
+  def signal[A]
+    (shared: Shared.Tab[A], tab: TabId)
+    (
+      using @implicitNotFound(
+        "A content script shares a tab's values, which only pages and the background watch.",
+      )
+      asBrowser: B <:< Browser,
+    )
+    : Signal[A] = signalOf(
+    browser,
+    asBrowser(browser).tabs.values(shared, tab),
+    shared.default,
+  )
+
+/**
+  * Each value of `values`, which `browser` runs while anything observes the
+  * signal, which is `default` until the first.
+  */
+private def signalOf[A]
+  (
+    browser: ContentBrowser,
+    values: Stream[IO, A],
+    default: A,
+  )
+  : Signal[A] = browser.events(values).toSignal(default)
 
 /**
   * The source of an event stream of the values of `values`, which `browser`
