@@ -3,7 +3,7 @@ package com.alecdorrington.omnibrowser.webext
 import cats.effect.IO
 import cats.syntax.all.*
 import com.alecdorrington.omnibrowser.{
-  Codec, Endpoint, MessagingError, Sender, Shared,
+  Codec, Message, MessagingError, Sender, Shared,
 }
 import com.alecdorrington.omnibrowser.webext.Interop.promise
 import scala.scalajs.js
@@ -14,59 +14,49 @@ import scala.scalajs.js
   */
 private[omnibrowser] object Messages:
 
-  /**
-    * Makes the request `request` of `endpoint`, sending it through `send`, and
-    * gives the response.
-    */
+  /** Sends `request` as `message`, through `send`, and gives the response. */
   def exchange[Req, Res]
-    (
-      endpoint: Endpoint[Req, Res],
-      request: Req,
-    )
+    (message: Message[Req, Res], request: Req)
     (send: js.Any => js.Promise[js.Any])
-    : IO[Res] = promise(send(Messages.request(endpoint, request)))
+    : IO[Res] = promise(send(Messages.request(message, request)))
     .adaptError { case js.JavaScriptException(error) =>
-      MessagingError(endpoint.name, error.toString)
+      MessagingError(message.name, error.toString)
     }
-    .flatMap(response(endpoint, _))
+    .flatMap(response(message, _))
 
   /**
-    * A listener that answers the requests of `endpoint` through `run`, which
-    * `launch` starts, and leaves every other message to the other listeners.
+    * A listener that answers the requests sent as `message` through `run`,
+    * which `launch` starts, and leaves every other message to the other
+    * listeners.
     */
   def listener[Req, Res]
     (
-      endpoint: Endpoint[Req, Res],
+      message: Message[Req, Res],
       launch: IO[Unit] => Unit,
     )
     (run: (Req, Sender) => IO[Res])
-    : MessageListener = (message, sender, respond) =>
-    val mine = Messages.endpoint(message).contains(endpoint.name)
+    : MessageListener = (json, sender, respond) =>
+    val mine = Messages.name(json).contains(message.name)
     if mine then
       launch(
         answer(
-          endpoint,
-          payload(message),
+          message,
+          payload(json),
           Messages.sender(sender),
         )(run).map(respond(_)),
       )
     mine
 
-  /** A request of `endpoint`. */
-  def request[Req, Res]
-    (
-      endpoint: Endpoint[Req, Res],
-      request: Req,
-    )
-    : js.Any = js
+  /** A request sent as `message`. */
+  def request[Req, Res](message: Message[Req, Res], request: Req): js.Any = js
     .Dynamic
     .literal(
-      omnibrowser = endpoint.name,
-      request = endpoint.request.encode(request),
+      omnibrowser = message.name,
+      request = message.request.encode(request),
     )
 
-  /** The name of the endpoint that `message` is a request of, if it is one. */
-  def endpoint(message: js.Any): Option[String] = field(message, "omnibrowser")
+  /** The name of the message that `json` is a request sent as, if it is one. */
+  def name(json: js.Any): Option[String] = field(json, "omnibrowser")
     .filter(js.typeOf(_) == "string")
     .map(_.asInstanceOf[String])
 
@@ -81,8 +71,8 @@ private[omnibrowser] object Messages:
   )
 
   /** What a request asks for. */
-  def payload(message: js.Any): js.Any =
-    field(message, "request").getOrElse(js.undefined)
+  def payload(json: js.Any): js.Any =
+    field(json, "request").getOrElse(js.undefined)
 
   /** A response holding `response`. */
   def success(response: js.Any): js.Any = js
@@ -92,19 +82,15 @@ private[omnibrowser] object Messages:
   /** A response saying why a request failed. */
   def failure(error: String): js.Any = js.Dynamic.literal(error = error)
 
-  /** Whether `message` answers a request, as no response does if none came. */
-  def isAnswer(message: js.Any): Boolean = hasField(message, "response") ||
-    hasField(message, "error")
+  /** Whether `json` answers a request, as no response does if none came. */
+  def isAnswer(json: js.Any): Boolean = hasField(json, "response") ||
+    hasField(json, "error")
 
-  /** The response that `message` holds to a request of `endpoint`. */
-  def response[Req, Res]
-    (
-      endpoint: Endpoint[Req, Res],
-      message: js.Any,
+  /** The response that `json` holds to a request sent as `message`. */
+  def response[Req, Res](message: Message[Req, Res], json: js.Any): IO[Res] = IO
+    .fromEither(
+      decode(message.response, json).leftMap(MessagingError(message.name, _)),
     )
-    : IO[Res] = IO.fromEither(
-    decode(endpoint.response, message).leftMap(MessagingError(endpoint.name, _)),
-  )
 
   /** A message through a port, holding a new value. */
   def value(json: js.Any): js.Any = js.Dynamic.literal(value = json)
@@ -113,31 +99,31 @@ private[omnibrowser] object Messages:
   def unshared: js.Any = js.Dynamic.literal(unshared = true)
 
   /**
-    * The value of `shared` that `message`, from a port, holds, or nothing if it
+    * The value of `shared` that `json`, from a port, holds, or nothing if it
     * says that nothing shares it.
     */
-  def watched[A](shared: Shared.Tab[A], message: js.Any): IO[Option[A]] = IO
+  def watched[A](shared: Shared.Tab[A], json: js.Any): IO[Option[A]] = IO
     .fromEither(
-      field(message, "value")
+      field(json, "value")
         .map(shared.codec.decode(_).map(Some(_)))
-        .orElse(Option.when(hasField(message, "unshared"))(Right(None)))
+        .orElse(Option.when(hasField(json, "unshared"))(Right(None)))
         .getOrElse(Left("The message holds no value."))
         .leftMap(MessagingError(shared.name, _)),
     )
 
   private def answer[Req, Res]
     (
-      endpoint: Endpoint[Req, Res],
+      message: Message[Req, Res],
       request: js.Any,
       sender: Sender,
     )
     (run: (Req, Sender) => IO[Res])
     : IO[js.Any] = IO
     .fromEither(
-      endpoint.request.decode(request).leftMap(MessagingError(endpoint.name, _)),
+      message.request.decode(request).leftMap(MessagingError(message.name, _)),
     )
     .flatMap(run(_, sender))
-    .map(response => success(endpoint.response.encode(response)))
+    .map(response => success(message.response.encode(response)))
     .handleError(error => failure(reason(error)))
 
   /**
@@ -149,9 +135,9 @@ private[omnibrowser] object Messages:
     case other => Option(other.getMessage).getOrElse(other.toString)
 
   private def decode[Res]
-    (codec: Codec[Res], message: js.Any)
+    (codec: Codec[Res], json: js.Any)
     : Either[String, Res] =
-    (field(message, "response"), field(message, "error")) match
+    (field(json, "response"), field(json, "error")) match
       case (Some(response), _) => codec.decode(response)
       case (None, Some(error)) => Left(stated(error))
       case (None, None)        => Left("Nothing in the extension serves it.")
@@ -161,13 +147,12 @@ private[omnibrowser] object Messages:
     if Codec.isNull(error) then "It failed for no stated reason."
     else error.toString
 
-  private def field(message: js.Any, name: String): Option[js.Any] = Option
-    .when(hasField(message, name))(
-      message.asInstanceOf[js.Dynamic].selectDynamic(name),
-    )
+  private def field(json: js.Any, name: String): Option[js.Any] = Option.when(
+    hasField(json, name),
+  )(json.asInstanceOf[js.Dynamic].selectDynamic(name))
 
-  private def isObject(message: js.Any): Boolean =
-    js.typeOf(message) == "object" && message != null
+  private def isObject(json: js.Any): Boolean = js.typeOf(json) == "object" &&
+    json != null
 
-  private def hasField(message: js.Any, name: String): Boolean =
-    isObject(message) && message.asInstanceOf[js.Object].hasOwnProperty(name)
+  private def hasField(json: js.Any, name: String): Boolean = isObject(json) &&
+    json.asInstanceOf[js.Object].hasOwnProperty(name)

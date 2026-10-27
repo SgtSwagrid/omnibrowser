@@ -203,17 +203,17 @@ class SharingSuite extends CatsEffectSuite:
       assertEquals(shared, 7)
       assertEquals(seen, List(1, 7, 1))
 
-  /** Whether `result` is a failure of the endpoint named `endpoint`. */
+  /** Whether `result` is a failure of the message named `name`. */
   private def failed
     (
       result: Either[Throwable, ?],
-      endpoint: String,
+      name: String,
     )
     : Boolean = result
     .left
     .exists:
-      case MessagingError(`endpoint`, _) => true
-      case _                             => false
+      case MessagingError(`name`, _) => true
+      case _                         => false
 
 /**
   * Counts what is added to each page whose path asks for it, whose popup
@@ -228,22 +228,22 @@ object Counter extends BrowserExtension[Storage]:
   val count = Shared.tab[Int]("count", 0)
 
   /** Adds to a page's count, and gives the new count. */
-  val add = Endpoint.tab[Int, Int]("add")
+  val add = Message.tab[Int, Int]("add")
 
   /** Stops a page counting. */
-  val stop = Endpoint.tab[Unit, Unit]("stop")
+  val stop = Message.tab[Unit, Unit]("stop")
 
   /** Has a late page begin sharing its count. */
-  val begin = Endpoint.tab[Unit, Unit]("begin")
+  val begin = Message.tab[Unit, Unit]("begin")
 
   /** Is never answered. */
-  val hang = Endpoint.tab[Unit, Unit]("hang")
+  val hang = Message.tab[Unit, Unit]("hang")
 
   /** Sets a page's count, then stops it counting at once. */
-  val finish = Endpoint.tab[Unit, Unit]("finish")
+  val finish = Message.tab[Unit, Unit]("finish")
 
   /** [[add]], as it would be with the wrong request. */
-  val misread = Endpoint.tab[String, Int]("add")
+  val misread = Message.tab[String, Int]("add")
 
   /** [[count]], as it would be with the wrong value. */
   val misshared = Shared.tab[String]("count", "")

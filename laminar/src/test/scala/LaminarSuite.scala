@@ -3,7 +3,7 @@ package com.alecdorrington.omnibrowser.laminar
 import cats.effect.{Deferred, IO}
 import cats.syntax.all.*
 import com.alecdorrington.omnibrowser.{
-  Background, Browser, BrowserExtension, ContentScript, Endpoint, Shared,
+  Background, Browser, BrowserExtension, ContentScript, Message, Shared,
   StorageKey, TabBrowser, TabId,
 }
 import com.alecdorrington.omnibrowser.Permission.Storage
@@ -158,7 +158,7 @@ object Tally extends BrowserExtension[Storage]:
   override val name = "Tally"
 
   /** Doubles its request. */
-  val double = Endpoint[Int, Int]("double")
+  val double = Message[Int, Int]("double")
 
   /** How many times the popup's button has been clicked. */
   val clicks = StorageKey.local[Int]("clicks", 0)
@@ -266,10 +266,10 @@ object Presser extends BrowserExtension[Any]:
   val presses = Shared.tab[Int]("presses", 0)
 
   /** Presses a page. */
-  val press = Endpoint.tab[Unit, Unit]("press")
+  val press = Message.tab[Unit, Unit]("press")
 
   /** Stops a page sharing its presses. */
-  val release = Endpoint.tab[Unit, Unit]("release")
+  val release = Message.tab[Unit, Unit]("release")
 
   override def contentScripts() = Seq(ContentScript("https://*/*")(browser =>
     (SignallingRef[IO].of(0), Deferred[IO, Unit]).flatMapN((count, released) =>

@@ -81,13 +81,13 @@ object Asker extends BrowserExtension[Any]:
   override val optionalPermissions = Permissions.of[Tabs & Storage]
 
   /** Asks for the tabs permission, and gives whether it was granted. */
-  val ask = Endpoint[Unit, Boolean]("ask")
+  val ask = Message[Unit, Boolean]("ask")
 
   /** Asks for the storage permission, then stores the request. */
-  val remember = Endpoint[String, Boolean]("remember")
+  val remember = Message[String, Boolean]("remember")
 
   /** Asks for a permission that the extension did not declare. */
-  val askUndeclared = Endpoint[Unit, Boolean]("askUndeclared")
+  val askUndeclared = Message[Unit, Boolean]("askUndeclared")
 
   val note = StorageKey.local[String]("note", "")
 

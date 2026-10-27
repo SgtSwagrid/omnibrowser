@@ -31,10 +31,10 @@ trait ContentBrowser:
 trait TabBrowser extends ContentBrowser:
 
   /**
-    * Answers the requests that the background and pages make of `endpoint` in
+    * Answers the requests that the background and pages send as `message` to
     * this script's tab, while the resource is in use.
     */
-  def serve[Req, Res](endpoint: Endpoint.Tab[Req, Res])(run: Req => IO[Res])
+  def serve[Req, Res](message: Message.Tab[Req, Res])(run: Req => IO[Res])
     : Resource[IO, Unit]
 
   /**
@@ -48,7 +48,7 @@ trait TabBrowser extends ContentBrowser:
     * tells them again when it returns from the back-forward cache, or is shown
     * after being prerendered, so that those watching its tab find it. Each time
     * reaches every open page of the extension, and wakes the background if it
-    * serves any endpoint.
+    * serves any message.
     */
   def share[A](shared: Shared.Tab[A])(signal: Signal[IO, A]): Resource[IO, Unit]
 
@@ -75,8 +75,11 @@ object Browser:
     /** The URL of the file at `path` within the extension. */
     def url(path: String): String
 
-    /** Makes a request of the part of the extension that serves `endpoint`. */
-    def call[Req, Res](endpoint: Endpoint[Req, Res])(request: Req): IO[Res]
+    /**
+      * Sends `request` as `message` to the part of the extension that serves
+      * it.
+      */
+    def call[Req, Res](message: Message[Req, Res])(request: Req): IO[Res]
 
   /** The values that the extension keeps. */
   trait Storage:
@@ -118,12 +121,12 @@ object Browser:
     def open(url: String): IO[Tab]
 
     /**
-      * Makes a request of the content scripts of `tab` that serve `endpoint`,
-      * which fails if none of them does.
+      * Sends `request` as `message` to the content scripts of `tab` that serve
+      * it, which fails if none of them does.
       */
     def call[Req, Res]
       (
-        endpoint: Endpoint.Tab[Req, Res],
+        message: Message.Tab[Req, Res],
         tab: TabId,
       )
       (request: Req)

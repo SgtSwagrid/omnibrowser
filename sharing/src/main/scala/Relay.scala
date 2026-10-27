@@ -20,10 +20,10 @@ object Relay extends BrowserExtension[Storage]:
   val count = Shared.tab[Int]("count", 0)
 
   /** Has a page's second script begin sharing its count. */
-  val begin = Endpoint.tab[Unit, Unit]("begin")
+  val begin = Message.tab[Unit, Unit]("begin")
 
   /** Has a page's second script stop sharing its count. */
-  val stop = Endpoint.tab[Unit, Unit]("stop")
+  val stop = Message.tab[Unit, Unit]("stop")
 
   /** Each count of the active tab that the popup has seen, latest first. */
   val seen = StorageKey.local[List[Int]]("seen", Nil)

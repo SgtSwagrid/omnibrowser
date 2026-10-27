@@ -27,14 +27,14 @@ object Handler:
 
   final case class Serve[Req, Res]
     (
-      endpoint: Endpoint[Req, Res],
+      message: Message[Req, Res],
       run: (Req, Sender, Browser) => IO[Res],
     )
     extends Handler
 
 /**
-  * Who made a request of an [[Endpoint]]: a content script, in the `tab` of its
-  * page, or another part of the extension, at `url`.
+  * Who sent a [[Message]]: a content script, in the `tab` of its page, or
+  * another part of the extension, at `url`.
   */
 final case class Sender(tab: Option[Tab], url: Option[String])
 

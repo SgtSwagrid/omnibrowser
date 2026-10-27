@@ -40,7 +40,7 @@ object WordCount extends BrowserExtension[Permission.Storage]:
 
   override val name = "Word Count"
 
-  val count = Endpoint[String, Int]("count")
+  val count = Message[String, Int]("count")
   val total = StorageKey.local[Int]("total", 0)
 
   override def background() = Background(
@@ -69,14 +69,14 @@ browser.grants.request[Permission.Tabs].flatMap:
   case None          => ... // The user refused.
 ```
 
-A handler that needs to know who made a request takes its sender too, as in `serve(endpoint)((request, sender, browser) => ...)`, where `sender.tab` is the tab of the content script that asked, if one did.
+A handler that needs to know who made a request takes its sender too, as in `serve(message)((request, sender, browser) => ...)`, where `sender.tab` is the tab of the content script that asked, if one did.
 
 The background and pages may make requests of a tab's content scripts too, and read the values that they share, so that what a content script knows reaches the popup without passing through storage.
-A content script serves an `Endpoint.tab`, and shares a `Shared.tab` value from an fs2 `Signal`, each while its `Resource` is in use:
+A content script serves a `Message.tab`, and shares a `Shared.tab` value from an fs2 `Signal`, each while its `Resource` is in use:
 
 ```scala
 val problem = Shared.tab[String]("problem", "")
-val dismiss = Endpoint.tab[Unit, Unit]("dismiss")
+val dismiss = Message.tab[Unit, Unit]("dismiss")
 
 // In a content script.
 SignallingRef[IO].of("").flatMap(last =>
@@ -89,9 +89,9 @@ browser.tabs.get(problem, tab)    // Its value now.
 browser.tabs.values(problem, tab) // Its value, then each new value.
 ```
 
-While nothing in a tab shares a value, its value there is its default, as an unset `StorageKey`'s is, and a request of a tab where nothing serves the endpoint fails.
+While nothing in a tab shares a value, its value there is its default, as an unset `StorageKey`'s is, and a request of a tab where nothing serves its message fails.
 `values` follows the tab: it gives the default before a content script there begins sharing the value, after it stops, and while the tab loads another page, whose content script it then finds, and it ends once the tab closes.
-It finds them as a page that begins sharing values tells the rest of the extension, and tells it again on returning from the back-forward cache or on being shown after it was prerendered. Each time reaches every open page of the extension, and wakes the background if it serves any endpoint.
+It finds them as a page that begins sharing values tells the rest of the extension, and tells it again on returning from the back-forward cache or on being shown after it was prerendered. Each time reaches every open page of the extension, and wakes the background if it serves any message.
 If several content scripts of one page share a value, the one that began last is its owner, until it stops.
 Chrome may stop the background while it watches a tab, as an open port does not keep it running, so watch from a page, such as the popup.
 Firefox may keep a port to a page in its back-forward cache open, so a watcher there sees that page's last value until it returns.
@@ -152,7 +152,7 @@ test("A page's words are added to the total."):
 ```
 
 Each action (`visit`, `openPopup`, `clickAction`, `call`, `store`, ...) waits until the extension has finished responding to it, and fails if the extension failed.
-A test may also act as the background would, as in `browser.call(endpoint, page.tab.get)(request)` and `browser.shared(value, page.tab.get)`, and close a tab or have it load another page, as in `browser.close(page.tab.get)` and `browser.navigate(page.tab.get, url)`.
+A test may also act as the background would, as in `browser.call(message, page.tab.get)(request)` and `browser.shared(value, page.tab.get)`, and close a tab or have it load another page, as in `browser.close(page.tab.get)` and `browser.navigate(page.tab.get, url)`.
 `FakeBrowser.install` runs the extension's code within the test.
 
 Each page has a DOM if the tests can load [jsdom](https://github.com/jsdom/jsdom), which `npm install --save-dev jsdom` installs into the project's `node_modules`, and Laminar's pages need one.

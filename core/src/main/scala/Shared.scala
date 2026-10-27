@@ -17,24 +17,24 @@ object Shared:
     (using val codec: Codec[A]):
 
     /**
-      * The endpoint through which the background and pages ask a page for the
+      * The message through which the background and pages ask a page for the
       * value of a shared value, which they name in the request.
       */
-    private[omnibrowser] val reading: Endpoint[String, A] =
-      Endpoint(Shared.reading)
+    private[omnibrowser] val reading: Message[String, A] =
+      Message(Shared.reading)
 
   /** A value that the content scripts of each tab may share. */
   def tab[A : Codec](name: String, default: A): Tab[A] = new Tab(name, default)
 
-  /** The name of the endpoint through which a page's shared values are read. */
+  /** The name of the message through which a page's shared values are read. */
   private[omnibrowser] val reading = "omnibrowser/shared"
 
   /**
-    * The endpoint through which a page tells the background and pages that it
+    * The message through which a page tells the background and pages that it
     * has begun sharing values, so that their watchers connect to it again.
     */
   private[omnibrowser] val announcement =
-    Endpoint[Unit, Unit]("omnibrowser/sharing")
+    Message[Unit, Unit]("omnibrowser/sharing")
 
   /** The name of a port through which a page's value of `name` is watched. */
   private[omnibrowser] def port(name: String): String = s"$reading/$name"

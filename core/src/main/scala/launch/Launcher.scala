@@ -60,7 +60,7 @@ private[omnibrowser] final class Launcher(val launch: IO[Unit] => Unit):
       api.runtime.onMessage.addListener(listener(serve, browser))
 
   /**
-    * A listener that answers the requests of `serve`'s endpoint, and leaves
+    * A listener that answers the requests sent as `serve`'s message, and leaves
     * every other message to the other listeners.
     */
   private def listener[Req, Res]
@@ -69,7 +69,7 @@ private[omnibrowser] final class Launcher(val launch: IO[Unit] => Unit):
       browser: => Browser,
     )
     : MessageListener =
-    Messages.listener(serve.endpoint, launch)(serve.run(_, _, browser))
+    Messages.listener(serve.message, launch)(serve.run(_, _, browser))
 
 private[omnibrowser] object Launcher:
 
