@@ -45,6 +45,9 @@ private[omnibrowser] final class WebExtensionBrowser
   override def storage(using Granted[Permission.Storage]): Browser.Storage =
     WebExtensionStorage(api.storage)
 
+  override lazy val languages: Browser.Languages =
+    WebExtensionLanguages(api.i18n)
+
   override lazy val tabs: Browser.Tabs = WebExtensionTabs(api.tabs, api.runtime)
 
   override lazy val action: Browser.Action = WebExtensionAction(api.action)
@@ -61,6 +64,41 @@ private[omnibrowser] final class WebExtensionRuntime
     (message: Message[Req, Res])
     (request: Req)
     : IO[Res] = Messages.exchange(message, request)(api.sendMessage)
+
+/**
+  * The browser's detector of languages, which finds none where the browser has
+  * none (Safari), or where it fails (Firefox for Android before 106, where it
+  * always threw).
+  */
+private[omnibrowser] final class WebExtensionLanguages
+  (api: js.UndefOr[I18nApi])
+  extends Browser.Languages:
+
+  override def detect(text: String): IO[Detection] = api
+    .filter(detects)
+    .fold(IO.pure(Detection.none))(i18n =>
+      promise(i18n.detectLanguage(text)).map(WebExtensionLanguages.detection),
+    )
+    .handleError(_ => Detection.none)
+
+  private def detects(i18n: I18nApi): Boolean =
+    js.typeOf(i18n.asInstanceOf[js.Dynamic].detectLanguage) == "function"
+
+private[omnibrowser] object WebExtensionLanguages:
+
+  /** The detection that `found` gives. */
+  def detection(found: LanguageDetectionApi): Detection = Detection(
+    found
+      .languages
+      .toList
+      .map(language =>
+        DetectedLanguage(
+          language.language,
+          language.percentage.round.toInt,
+        ),
+      ),
+    found.isReliable,
+  )
 
 private[omnibrowser] final class WebExtensionStorage
   (api: StorageApi)

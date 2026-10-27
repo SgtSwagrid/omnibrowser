@@ -33,7 +33,7 @@ test("A page's words are added to the total."):
 | --- | --- |
 | The user | `visit(url, text)`, `navigate(tab, url, text)`, `close(tab)`, `openPopup`, `openOptions`, `clickAction`, `answerRequests(grant)` |
 | The user, on a page that `visit` or `openPopup` gave | `click(selector)`, `enter(selector, text)`, `text(selector)`, `value(selector)`, `isChecked(selector)` |
-| The browser | `restart` |
+| The browser | `restart`, `detectLanguages(text => language)` (finding none until told, and never as built for Safari, which has no detector) |
 | A content script | `call(message)(request)` |
 | The background | `call(message, tab)(request)`, `shared(value, tab)` |
 | Another device | `store(key, value)` |

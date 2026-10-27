@@ -3,6 +3,7 @@ package com.alecdorrington.omnibrowser
 import cats.effect.{IO, Resource}
 import fs2.Stream
 import fs2.concurrent.Signal
+import io.circe.Codec
 
 /**
   * The browser, as every part of the extension sees it, its content scripts
@@ -15,6 +16,9 @@ trait ContentBrowser:
 
   /** The values that the extension keeps. */
   def storage(using Granted[Permission.Storage]): Browser.Storage
+
+  /** What the browser can tell of the languages that text is written in. */
+  def languages: Browser.Languages
 
   /**
     * Starts `program` at once without waiting, as from the handler of a DOM
@@ -107,6 +111,17 @@ object Browser:
     /** The value of `key`, then each new value that it is given. */
     final def values[A](key: StorageKey[A]): Stream[IO, A] =
       Stream.eval(get(key)) ++ changes(key)
+
+  /** What the browser can tell of the languages that text is written in. */
+  trait Languages:
+
+    /**
+      * The languages that `text` is written in, as the browser's own detector
+      * finds them, on the device, which needs no permission. A short text, as a
+      * heading or a link, may be found in none, or not reliably. Safari has no
+      * detector, nor Firefox for Android before 106, so finds none in any text.
+      */
+    def detect(text: String): IO[Detection]
 
   /** The browser's tabs. */
   trait Tabs:
@@ -224,6 +239,36 @@ final case class Tab
     url: Option[String],
     title: Option[String],
   )
+
+/**
+  * The languages that the browser found a text to be written in, the one of the
+  * most of it first, which are only a guess unless the browser found them
+  * `reliable`.
+  */
+final case class Detection
+  (
+    languages: List[DetectedLanguage],
+    reliable: Boolean,
+  )
+  derives Codec:
+
+  /** The language of the most of the text, if the browser found it reliably. */
+  def language: Option[String] = languages
+    .headOption
+    .filter(_ => reliable)
+    .map(_.code)
+
+object Detection:
+
+  /** That the browser found no language in a text. */
+  val none: Detection = Detection(Nil, reliable = false)
+
+/**
+  * A language that the browser found in a text, by its ISO 639 `code` (as `de`,
+  * or `zh-TW` where the region tells it apart), with the `percentage` of the
+  * text written in it.
+  */
+final case class DetectedLanguage(code: String, percentage: Int) derives Codec
 
 /** A browser that an extension may be built for. */
 enum Target(private[omnibrowser] val id: String):

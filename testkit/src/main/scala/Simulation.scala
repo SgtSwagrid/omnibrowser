@@ -83,6 +83,30 @@ private[testkit] final class Simulation(runner: Runner, activity: Activity):
   /** The optional permissions and hosts that the fake user has granted. */
   private val granted = mutable.Set.empty[String]
 
+  /**
+    * The language, by its code, that the browser finds each text written in, if
+    * it finds one.
+    */
+  var languageOf: String => Option[String] = _ => None
+
+  /** Whether the browser has a detector of languages, which Safari has not. */
+  def detects: Boolean = runner.target != Target.Safari
+
+  /**
+    * The languages that `text` is written in, as `i18n.detectLanguage` gives
+    * them: all of it, reliably, in the one that [[languageOf]] gives, if any.
+    */
+  def detect(text: String): js.Object = languageOf(text).fold(
+    js.Dynamic.literal(isReliable = false, languages = js.Array()),
+  )(code =>
+    js.Dynamic
+      .literal(
+        isReliable = true,
+        languages =
+          js.Array(js.Dynamic.literal(language = code, percentage = 100)),
+      ),
+  )
+
   /** Where the extension's files are, as URLs. */
   def origin: String = runner.target match
     case Target.Chromium => s"chrome-extension://${ Simulation.id }"
