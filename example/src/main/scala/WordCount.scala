@@ -19,10 +19,10 @@ object WordCount extends BrowserExtension[Storage]:
   override val description = "Counts the words on the pages you visit."
 
   /** Counts the words in a page's text, and gives how many there were. */
-  val count = Endpoint[String, Int]("count")
+  val count = Message[String, Int]("count")
 
   /** Sets the count back to nothing. */
-  val reset = Endpoint[Unit, Unit]("reset")
+  val reset = Message[Unit, Unit]("reset")
 
   /** How many words have been counted in all. */
   val total = StorageKey.local[Int]("total", 0)

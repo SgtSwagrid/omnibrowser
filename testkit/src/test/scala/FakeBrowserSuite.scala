@@ -11,7 +11,7 @@ class FakeBrowserSuite extends CatsEffectSuite:
   test("Installing the extension reports its installation to the background."):
     FakeBrowser.install(Probe).flatMap(_.stored(Probe.installs)).assertEquals(1)
 
-  test("A request is answered by the background that serves its endpoint."):
+  test("A request is answered by the background that serves its message."):
     FakeBrowser
       .install(Probe)
       .flatMap(_.call(Probe.echo)("stressed"))
@@ -99,10 +99,10 @@ object Probe extends BrowserExtension[Storage]:
   override val name = "Probe"
 
   /** Reverses its request. */
-  val echo = Endpoint[String, String]("echo")
+  val echo = Message[String, String]("echo")
 
   /** Always fails. */
-  val fail = Endpoint[Unit, Unit]("fail")
+  val fail = Message[Unit, Unit]("fail")
 
   /** How many times the extension has been installed. */
   val installs = StorageKey.local[Int]("installs", 0)

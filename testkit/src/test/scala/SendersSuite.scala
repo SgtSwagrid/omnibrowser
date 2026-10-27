@@ -29,10 +29,10 @@ object Flagger extends BrowserExtension[Any]:
   override val name = "Flagger"
 
   /** Flags the sender's tab. */
-  val flag = Endpoint[Unit, Unit]("flag")
+  val flag = Message[Unit, Unit]("flag")
 
   /** Gives the URL of the sender's tab, if it has one. */
-  val where = Endpoint[Unit, String]("where")
+  val where = Message[Unit, String]("where")
 
   override def background() = Background(
     serve(flag)((_, sender, browser) =>
