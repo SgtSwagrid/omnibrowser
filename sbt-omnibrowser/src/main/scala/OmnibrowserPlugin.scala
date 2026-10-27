@@ -179,36 +179,40 @@ object OmnibrowserPlugin extends AutoPlugin:
   /**
     * Links the content scripts' own bundle, beside the main one that `link`
     * links and at the same stage, from the same code but from their own entry
-    * point, so that it holds only what they reach.
+    * point, so that it holds only what they reach. It is tagged as a link, as
+    * Scala.js's own are, so that a build that limits how many link at once
+    * counts it.
     */
   private def linkContent
     (link: TaskKey[Attributed[Report]])
-    : Def.Initialize[Task[File]] = Def.task {
-    val implementation = (Compile / scalaJSLinkerImpl).value
-    val config         = (Compile / link / scalaJSLinkerConfig)
-      .value
-      .withOutputPatterns(OutputPatterns.fromJSFile(Assembly.contentBundle))
-    val linker = (Compile / link / contentLinker)
-      .value
-      .ensure(implementation.clearableLinker(config))
-    val ir        = (Compile / scalaJSIR).value.data
-    val linked    = (Compile / link / scalaJSLinkerOutputDirectory).value
-    val log       = LinkerLog(streams.value.log)
-    val directory = linked.getParentFile / s"${ linked.getName }-content"
-    val entry     = ModuleInitializer.mainMethodWithArgs(contentEntry, "main")
-    IO.createDirectory(directory)
-    val output = implementation.outputDirectory(directory.toPath)
-    try
-      Await.result(
-        linker.link(ir, Seq(entry), output, log),
-        Duration.Inf,
-      )
-    catch
-      case _: LinkingException => throw MessageOnlyException(
-          "The content scripts' bundle failed to link.",
+    : Def.Initialize[Task[File]] = Def
+    .task {
+      val implementation = (Compile / scalaJSLinkerImpl).value
+      val config         = (Compile / link / scalaJSLinkerConfig)
+        .value
+        .withOutputPatterns(OutputPatterns.fromJSFile(Assembly.contentBundle))
+      val linker = (Compile / link / contentLinker)
+        .value
+        .ensure(implementation.clearableLinker(config))
+      val ir        = (Compile / scalaJSIR).value.data
+      val linked    = (Compile / link / scalaJSLinkerOutputDirectory).value
+      val log       = LinkerLog(streams.value.log)
+      val directory = linked.getParentFile / s"${ linked.getName }-content"
+      val entry     = ModuleInitializer.mainMethodWithArgs(contentEntry, "main")
+      IO.createDirectory(directory)
+      val output = implementation.outputDirectory(directory.toPath)
+      try
+        Await.result(
+          linker.link(ir, Seq(entry), output, log),
+          Duration.Inf,
         )
-    directory
-  }
+      catch
+        case _: LinkingException => throw MessageOnlyException(
+            "The content scripts' bundle failed to link.",
+          )
+      directory
+    }
+    .tag(ScalaJSTags.Link)
 
   /** Zips each layout of the extension that `layouts` makes, for release. */
   private def zip

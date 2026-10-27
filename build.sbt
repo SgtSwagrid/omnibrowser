@@ -19,11 +19,16 @@ val projectRoot = "com.alecdorrington.omnibrowser"
 // The tests give the fake browser's pages a DOM through jsdom, from npm.
 Npm.installation
 
+// Scala.js links every project's bundles at once unless told otherwise, which
+// adds to what CI's sbt must hold in its heap at once.
+Global / concurrentRestrictions += Tags.limit(ScalaJSTags.Link, 2)
+
 /** The library itself: the model of the browser, and its implementation. */
 lazy val `omnibrowser-core` = project
   .in(file("core"))
   .enablePlugins(ScalaJSPlugin)
   .settings(
+    Linking.batchOnCi,
     packagePrefix := projectRoot,
     // Its entry points start the bundles of an extension, not a program.
     Compile / mainClass := None,
@@ -38,6 +43,7 @@ lazy val `omnibrowser-testkit` = project
   .dependsOn(`omnibrowser-core`)
   .enablePlugins(ScalaJSPlugin)
   .settings(
+    Linking.batchOnCi,
     packagePrefix := s"$projectRoot.testkit",
     Dependencies.munitCatsEffect,
     Npm.beforeTests,
@@ -52,6 +58,7 @@ lazy val `omnibrowser-laminar` = project
   )
   .enablePlugins(ScalaJSPlugin)
   .settings(
+    Linking.batchOnCi,
     packagePrefix := s"$projectRoot.laminar",
     Dependencies.laminar,
     Dependencies.munitCatsEffect,
@@ -80,6 +87,7 @@ lazy val `omnibrowser-example` = project
   )
   .enablePlugins(OmnibrowserPlugin)
   .settings(
+    Linking.batchOnCi,
     packagePrefix  := s"$projectRoot.example",
     publish / skip := true,
     Dependencies.munitCatsEffect,
@@ -99,6 +107,7 @@ lazy val `omnibrowser-sharing` = project
   )
   .enablePlugins(OmnibrowserPlugin)
   .settings(
+    Linking.batchOnCi,
     packagePrefix  := s"$projectRoot.sharing",
     publish / skip := true,
     Dependencies.munitCatsEffect,
