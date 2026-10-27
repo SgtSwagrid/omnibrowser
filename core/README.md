@@ -43,6 +43,8 @@ Content scripts get a bundle of their own, holding only what `contentScripts()` 
 
 Values are JSON, through [circe](https://circe.github.io/circe/)'s `Encoder` and `Decoder`, which `derives Codec` makes for a case class, enum or sealed trait.
 A `Long` beyond 2<sup>53</sup> loses precision, as JavaScript's numbers hold no more.
+A stored value that can't be decoded, as one that an earlier version stored differently, is its key's default until it is set again, and the console warns of it.
+To read an old format instead, decode that too, as with circe's `Decoder#or`.
 `tabs.values` follows its tab from page to page, giving the default where nothing shares the value.
 
 | Storage area | Keeps a value | Content scripts see it |

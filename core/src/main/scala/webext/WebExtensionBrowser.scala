@@ -8,6 +8,7 @@ import com.alecdorrington.omnibrowser.webext.Circe.*
 import com.alecdorrington.omnibrowser.webext.Interop.{events, promise}
 import fs2.Stream
 import fs2.concurrent.Signal
+import org.scalajs.dom.console
 import scala.scalajs.js
 
 /**
@@ -67,7 +68,7 @@ private[omnibrowser] final class WebExtensionStorage
 
   override def get[A](key: StorageKey[A]): IO[A] = promise(
     area(key).get(js.Array(key.name)),
-  ).flatMap(items => read(key, items.get(key.name)))
+  ).flatMap(items => WebExtensionStorage.read(key, items.get(key.name)))
 
   override def set[A](key: StorageKey[A], value: A): IO[Unit] =
     promise(area(key).set(js.Dictionary(key.name -> key.codec.encodeJs(value))))
@@ -77,7 +78,7 @@ private[omnibrowser] final class WebExtensionStorage
 
   override def changes[A](key: StorageKey[A]): Stream[IO, A] =
     events[Option[js.Any], StorageListener](api.onChanged)(changed(key, _))
-      .evalMap(read(key, _))
+      .evalMap(WebExtensionStorage.read(key, _))
 
   /**
     * A listener for changes to storage, which gives `emit` each new value of
@@ -97,12 +98,28 @@ private[omnibrowser] final class WebExtensionStorage
     case StorageArea.Sync    => api.sync
     case StorageArea.Session => api.session
 
-  private def read[A](key: StorageKey[A], json: Option[js.Any]): IO[A] = IO
-    .fromEither(
-      json
-        .fold(key.default.asRight[String])(key.codec.decodeJs)
-        .leftMap(StorageError(key.name, _)),
+private[omnibrowser] object WebExtensionStorage:
+
+  /**
+    * The value of `key` that `json` holds as stored, or its default if nothing
+    * is stored, or if what is stored cannot be decoded, as when an earlier
+    * version stored it differently, of which it warns.
+    */
+  def read[A](key: StorageKey[A], json: Option[js.Any]): IO[A] =
+    json.fold(IO.pure(key.default))(decode(key, _))
+
+  private def decode[A](key: StorageKey[A], json: js.Any): IO[A] = key
+    .codec
+    .decodeJs(json)
+    .fold(
+      reason => warn(key, reason).as(key.default),
+      IO.pure,
     )
+
+  private def warn(key: StorageKey[?], reason: String): IO[Unit] = IO(
+    console.warn(s"The stored value of ${ key
+        .name } cannot be decoded, so it is its default until it is set again: $reason"),
+  )
 
 /**
   * The browser's tabs, through `api`, and through `runtime` the announcements

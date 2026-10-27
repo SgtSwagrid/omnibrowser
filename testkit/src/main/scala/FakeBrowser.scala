@@ -5,7 +5,8 @@ import cats.syntax.all.*
 import com.alecdorrington.omnibrowser.*
 import com.alecdorrington.omnibrowser.launch.PageKind
 import com.alecdorrington.omnibrowser.webext.{
-  TabApi, WebExtensionApi, WebExtensionBrowser, WebExtensionTabs,
+  TabApi, WebExtensionApi, WebExtensionBrowser, WebExtensionStorage,
+  WebExtensionTabs,
 }
 import com.alecdorrington.omnibrowser.webext.Circe.*
 import scala.concurrent.duration.*
@@ -89,10 +90,13 @@ final class FakeBrowser private (
     .tabs
     .get(shared, tab) <* settle
 
-  /** The stored value of `key`. */
+  /**
+    * The stored value of `key`, or its default if what is stored cannot be
+    * decoded, as the extension would see it.
+    */
   def stored[A](key: StorageKey[A]): IO[A] = IO(
     simulation.stored(key.area.id, key.name),
-  ).flatMap(json => IO.fromEither(decode(key, json)))
+  ).flatMap(WebExtensionStorage.read(key, _))
 
   /** Stores `value` under `key`, as though another device had synced it. */
   def store[A](key: StorageKey[A], value: A): IO[Unit] = act(simulation.write(
@@ -165,12 +169,6 @@ final class FakeBrowser private (
         if idle && now == events then quiet + 1 else 0,
         remaining - 1,
       )
-
-  private def decode[A]
-    (key: StorageKey[A], json: Option[js.Any])
-    : Either[StorageError, A] = json
-    .fold(key.default.asRight[String])(key.codec.decodeJs)
-    .leftMap(StorageError(key.name, _))
 
 object FakeBrowser:
 
