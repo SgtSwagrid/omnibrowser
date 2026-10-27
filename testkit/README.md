@@ -2,8 +2,32 @@
 
 `omnibrowser-testkit` tests an extension without a browser. `FakeBrowser` is an in-memory fake of the WebExtensions API, into which a test installs the extension, acts as the user would, and checks what the extension did.
 
-- `FakeBrowser.install` runs the extension's code within the test.
-- `FakeBrowser.installBuilt` runs the extension as the [plugin](../sbt-omnibrowser) built it for a browser, with each part in a sandbox of its own.
+## ⬇️ Installation
+
+It is published apart from the core library, which is all that the [plugin](../sbt-omnibrowser) adds, so add it to your tests yourself:
+
+```scala
+libraryDependencies += "com.alecdorrington" %% "omnibrowser-testkit" % omnibrowserVersion.value % Test
+```
+
+Pages have a DOM if the tests can load [jsdom](https://github.com/jsdom/jsdom), which `npm install --save-dev jsdom` installs into the project's `node_modules`.
+Without it, a page is a stand-in with only a body of text, so [Laminar's](../laminar) pages need it.
+
+## 🚀 Usage
+
+```scala
+test("A page's words are added to the total."):
+  for
+    browser <- FakeBrowser.install(WordCount)
+    _       <- browser.visit("https://example.com/", "The quick brown fox")
+    total   <- browser.stored(WordCount.total)
+  yield assertEquals(total, 4)
+```
+
+| | Runs | Each page, given jsdom |
+| --- | --- | --- |
+| `FakeBrowser.install(extension)` | The extension's code, within the test | A document of one shared window |
+| `FakeBrowser.installBuilt(Target.Chrome)` | The extension as the [plugin](../sbt-omnibrowser) built it for that browser, each part in a sandbox of its own | A window of its own, from the HTML that the plugin wrote |
 
 | Acting as | `browser.` |
 | --- | --- |
@@ -16,12 +40,3 @@
 | A check | `stored(key)`, `badge`, `badgeOf(tab)`, `badgeColour`, `badgeColourOf(tab)`, `tabs` |
 
 Each action waits until the extension has finished responding to it, and fails if the extension failed.
-Pages have a DOM if the tests can load [jsdom](https://github.com/jsdom/jsdom) from `node_modules`.
-
-It is published apart from the core library, which is all that the [plugin](../sbt-omnibrowser) adds, so add it to your tests yourself:
-
-```scala
-libraryDependencies += "com.alecdorrington" %% "omnibrowser-testkit" % omnibrowserVersion.value % Test
-```
-
-See [Testing](../README.md#-testing) in the main README.
