@@ -6,4 +6,4 @@ Its popup, written with [Laminar](../laminar), shows how many it has counted in 
 It tests the library, the [plugin](../sbt-omnibrowser) and the [testkit](../testkit) together: its tests run it in the fake browser both within the test and as the plugin built it for each browser.
 It isn't published.
 
-`sbt omnibrowser-example/omnibrowserBuild` lays it out for Chrome and Firefox under `target/out`, ready to load unpacked.
+`sbt omnibrowser-example/omnibrowserBuild` lays it out for Chromium, Firefox and Safari under `target/out`, ready to load unpacked.

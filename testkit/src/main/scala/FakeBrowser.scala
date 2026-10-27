@@ -294,7 +294,7 @@ final case class NoDom()
 
 /**
   * The extension did not read `runtime.lastError` while a listener heard of the
-  * failure `reason`, which Chrome reports as an error.
+  * failure `reason`, which Chromium reports as an error.
   */
 final case class UncheckedError(reason: String)
   extends Exception(s"Unchecked runtime.lastError: $reason")

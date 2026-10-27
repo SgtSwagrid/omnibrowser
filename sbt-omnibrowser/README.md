@@ -1,6 +1,6 @@
 # 🔧 sbt-omnibrowser
 
-The sbt plugin that builds an extension written with Omnibrowser, for Chrome and Firefox.
+The sbt plugin that builds an extension written with Omnibrowser, for Chromium, Firefox and Safari.
 
 ## ⬇️ Installation
 
@@ -24,11 +24,19 @@ The [testkit](../testkit) and [`omnibrowser-laminar`](../laminar) are the projec
 
 | Setting | Default | Is |
 | --- | --- | --- |
-| `omnibrowserTargets` | `Target.Chrome`, `Target.Firefox` | The browsers to build for |
+| `omnibrowserTargets` | `Target.Chromium`, `Target.Firefox`, `Target.Safari` | The browsers to build for |
 | `omnibrowserExtension` | The only object extending `BrowserExtension` | The object defining the extension, as `Some("com.example.WordCount")` |
 | `omnibrowserAssets` | `src/main/extension` | The files copied into the extension as they are, such as its icons |
 | `omnibrowserGeckoId` | `<normalizedName>@<organization>` | The extension's ID in Firefox |
 | `omnibrowserVersion` | The plugin's own | The version of the Omnibrowser libraries to use with it |
+
+| Target | Runs in | Loads unpacked | Is published to |
+| --- | --- | --- | --- |
+| `Target.Chromium` | Chrome, Edge, Opera, Brave, Vivaldi and the other browsers built on Chromium | `chrome://extensions`, **Load unpacked** | The Chrome Web Store and Edge Add-ons, from the same zip |
+| `Target.Firefox` | Firefox, on desktop and Android | `about:debugging`, **Load Temporary Add-on…** | Firefox Add-ons |
+| `Target.Safari` | Safari, on macOS, iOS and iPadOS | Safari on a Mac, **Settings → Developer → Add Temporary Extension…** | The App Store, as an app, from App Store Connect's Safari Web Extension Packager or from Xcode |
+
+Each zip is named `<name>-<version>-<target>.zip`, as `word-count-1.0.0-chromium.zip`.
 
 ## ⚙️ How it works
 

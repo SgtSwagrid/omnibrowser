@@ -44,14 +44,14 @@ object WordCount extends BrowserExtension[Permission.Storage]:
   )
 ```
 
-`sbt omnibrowserBuild` builds it for Chrome and Firefox, ready to load unpacked.
+`sbt omnibrowserBuild` builds it for Chromium (Chrome, Edge and the rest), Firefox and Safari, ready to load unpacked.
 
 ## 📦 Modules
 
 | Module | For |
 | --- | --- |
 | [`omnibrowser-core`](core) | Writing the extension: its parts, the messages and values passed between them, storage and permissions |
-| [`sbt-omnibrowser`](sbt-omnibrowser) | Building it for Chrome and Firefox |
+| [`sbt-omnibrowser`](sbt-omnibrowser) | Building it for Chromium, Firefox and Safari |
 | [`omnibrowser-testkit`](testkit) | Testing it in a fake browser |
 | [`omnibrowser-laminar`](laminar) | Writing its pages with [Laminar](https://laminar.dev) |
 | [`example`](example) | An example extension, with a Laminar popup and tests (not published) |

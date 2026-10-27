@@ -145,7 +145,7 @@ object Browser:
       * and otherwise the value that the content script shares. It follows the
       * tab from page to page, and ends with the default once the tab closes.
       *
-      * Chrome may stop the background while it watches, as an open port does
+      * Chromium may stop the background while it watches, as an open port does
       * not keep it running, so a page, such as the popup, is the place to
       * watch. Firefox may keep a port to a page in its back-forward cache open,
       * so the value there is that page's last until it returns, or until
@@ -228,9 +228,17 @@ final case class Tab
 /** A browser that an extension may be built for. */
 enum Target(private[omnibrowser] val id: String):
 
-  case Chrome extends Target("chrome")
+  /**
+    * The browsers built on Chromium, which share its extensions: Chrome, Edge,
+    * Opera, Brave, Vivaldi and others.
+    */
+  case Chromium extends Target("chromium")
 
+  /** Firefox, on desktop and on Android. */
   case Firefox extends Target("firefox")
+
+  /** Safari, on macOS, iOS and iPadOS. */
+  case Safari extends Target("safari")
 
 object Target:
 

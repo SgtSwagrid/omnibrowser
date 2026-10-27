@@ -55,7 +55,7 @@ private[omnibrowser] trait RuntimeApi extends js.Object:
 
   /**
     * Why the last call failed, as during the listener of a port that could not
-    * connect, which Chrome reports as an error unless the listener reads it.
+    * connect, which Chromium reports as an error unless the listener reads it.
     */
   def lastError: js.UndefOr[js.Object]                         = js.native
   val onInstalled: Event[js.Function1[InstalledDetails, Unit]] = js.native

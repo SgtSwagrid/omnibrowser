@@ -31,17 +31,22 @@ class AndroidSuite extends FunSuite:
   test("An extension for desktop Firefox alone does not mention Android."):
     assert(js.isUndefined(settings(Desktop).gecko_android))
 
-  test("Chrome is told nothing of Android."):
-    val manifest = js
-      .JSON
-      .parse(
-        Describe.files(
-          Mobile,
-          "Mobile",
-          Build(Target.Chrome, "1", "id"),
-        )("manifest.json"),
+  test("Chromium and Safari are told nothing of Android."):
+    Seq(Target.Chromium, Target.Safari).foreach: target =>
+      val manifest = js
+        .JSON
+        .parse(
+          Describe.files(
+            Mobile,
+            "Mobile",
+            Build(target, "1", "id"),
+          )("manifest.json"),
+        )
+      assert(js.isUndefined(manifest.browser_specific_settings))
+      assertEquals(
+        Describe.warnings(Mobile, Build(target, "1", "id")),
+        Seq.empty,
       )
-    assert(js.isUndefined(manifest.browser_specific_settings))
 
   test("A permission that Firefox for Android lacks is warned of."):
     val warnings =

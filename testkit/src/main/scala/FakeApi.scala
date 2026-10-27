@@ -81,7 +81,7 @@ private[testkit] final class FakeRuntime
 
   /**
     * Does `action` with `failure` as the last error, and gives whether the
-    * extension read it meanwhile, as Chrome reports it as an error otherwise.
+    * extension read it meanwhile, as Chromium reports it as an error otherwise.
     */
   private[testkit] final def failing
     (failure: js.Error, action: () => Unit)

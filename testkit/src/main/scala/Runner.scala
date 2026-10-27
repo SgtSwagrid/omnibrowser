@@ -80,7 +80,7 @@ private[testkit] final class InProcess
 
   private val launcher = Launcher(launch)
 
-  override def target: Target = Target.Chrome
+  override def target: Target = Target.Chromium
 
   override def name: String = extension.name
 
@@ -298,7 +298,8 @@ private[testkit] final class Sandbox
   private val globals = Sandbox.shared.filterNot((name, _) => has(name)) ++ Seq(
     "console"               -> SandboxConsole(activity),
     Sandbox.apiName(target) -> context.api,
-    // Chrome's background is a service worker, which loads the bundle itself.
+    // Chromium's and Safari's background is a service worker, which loads the
+    // bundle itself.
     "importScripts" ->
       (((file: String) => load(file)): js.Function1[String, Unit]),
   )
@@ -340,8 +341,8 @@ private[testkit] object Sandbox:
 
   /** The global under which `target` offers the WebExtensions API. */
   private def apiName(target: Target): String = target match
-    case Target.Chrome  => "chrome"
-    case Target.Firefox => "browser"
+    case Target.Chromium                => "chrome"
+    case Target.Firefox | Target.Safari => "browser"
 
 /** The console of a [[Sandbox]], which records each error as a failure. */
 private[testkit] final class SandboxConsole

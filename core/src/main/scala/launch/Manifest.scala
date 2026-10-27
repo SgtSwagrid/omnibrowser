@@ -77,17 +77,17 @@ private[omnibrowser] object Manifest:
       release ++ Option(found.group(2)).filter(_ => release.size < 4),
     )
 
-  /** `numbers`, with a last `1` added if all are zero, as Chrome refuses. */
+  /** `numbers`, with a last `1` added if all are zero, as Chromium refuses. */
   private def nonZero(numbers: Seq[String]): Seq[String] =
     if numbers.exists(_.exists(_ != '0')) then numbers
     else numbers.take(3) :+ "1"
 
   /**
-    * Whether to show the full version beside the numeric one, as only Chrome
-    * can.
+    * Whether to show the full version beside the numeric one, as every browser
+    * but Firefox can.
     */
-  private def hasVersionName(build: Build): Boolean = build.target ==
-    Target.Chrome && numericVersion(build.version) != build.version
+  private def hasVersionName(build: Build): Boolean = build.target !=
+    Target.Firefox && numericVersion(build.version) != build.version
 
   private def action(extension: BrowserExtension[?]): js.Object = entries(
     entryIf(extension.popup().isDefined)(
@@ -103,11 +103,14 @@ private[omnibrowser] object Manifest:
   )
 
   /**
-    * Where the background is. Chrome runs it as a service worker of a single
-    * script, whereas Firefox runs it as a page of several scripts.
+    * Where the background is. Chromium and Safari run it as a service worker of
+    * a single script, whereas Firefox runs it as a page of several scripts.
+    * Safari on iOS requires a background that it may stop, as a service worker
+    * is.
     */
   private def background(target: Target): js.Object = target match
-    case Target.Chrome  => entries(entry("service_worker", Layout.background))
+    case Target.Chromium | Target.Safari =>
+      entries(entry("service_worker", Layout.background))
     case Target.Firefox => entries(entry(
         "scripts",
         strings(Seq(Layout.background, Layout.bundle)),

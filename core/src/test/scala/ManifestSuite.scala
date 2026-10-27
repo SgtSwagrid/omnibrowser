@@ -49,7 +49,7 @@ class ManifestSuite extends FunSuite:
       "1.2.3.4",
     )
 
-  test("A version is never all zeros, which Chrome refuses."):
+  test("A version is never all zeros, which Chromium refuses."):
     assertEquals(
       Manifest.numericVersion("0.0.0+3-abc-SNAPSHOT"),
       "0.0.0.3",
@@ -67,25 +67,34 @@ class ManifestSuite extends FunSuite:
       "0.1",
     )
 
-  test("Chrome shows the build's full version beside the numeric one."):
-    assertEquals(
-      manifest(Target.Chrome).version_name.asInstanceOf[String],
-      "1.2.3+4-abc",
+  test(
+    "Every browser but Firefox shows the build's full version beside the numeric one.",
+  ):
+    Seq(Target.Chromium, Target.Safari).foreach(target =>
+      assertEquals(
+        manifest(target).version_name.asInstanceOf[String],
+        "1.2.3+4-abc",
+      ),
     )
+    assert(js.isUndefined(manifest(Target.Firefox).version_name))
 
   test("The manifest requests the extension's permissions."):
     assertEquals(
-      strings(manifest(Target.Chrome).permissions),
+      strings(manifest(Target.Chromium).permissions),
       List("storage"),
     )
 
-  test("Chrome runs the background as a service worker that loads the bundle."):
-    val background = manifest(Target.Chrome).background
-    assertEquals(
-      background.service_worker.asInstanceOf[String],
-      "background.js",
-    )
-    assert(files(Target.Chrome)("background.js").contains("importScripts"))
+  test(
+    "Chromium and Safari run the background as a service worker that loads the bundle.",
+  ):
+    Seq(Target.Chromium, Target.Safari).foreach: target =>
+      val background = manifest(target).background
+      assertEquals(
+        background.service_worker.asInstanceOf[String],
+        "background.js",
+      )
+      assert(js.isUndefined(background.scripts))
+      assert(files(target)("background.js").contains("importScripts"))
 
   test("Firefox runs the background as a page that loads the bundle."):
     val background = manifest(Target.Firefox).background
@@ -104,7 +113,9 @@ class ManifestSuite extends FunSuite:
         .asInstanceOf[String],
       "sample@example.com",
     )
-    assert(js.isUndefined(manifest(Target.Chrome).browser_specific_settings))
+    Seq(Target.Chromium, Target.Safari).foreach(target =>
+      assert(js.isUndefined(manifest(target).browser_specific_settings)),
+    )
 
   test(
     "Firefox is told that an extension collects nothing, unless it says otherwise.",
@@ -126,7 +137,7 @@ class ManifestSuite extends FunSuite:
         Describe.files(
           Asker,
           "Asker",
-          Build(Target.Chrome, "1", "id"),
+          Build(Target.Chromium, "1", "id"),
         )("manifest.json"),
       )
     assertEquals(
@@ -169,7 +180,7 @@ class ManifestSuite extends FunSuite:
     )
 
   test("Each content script loads its bootstrap before the bundle."):
-    val scripts = manifest(Target.Chrome)
+    val scripts = manifest(Target.Chromium)
       .content_scripts
       .asInstanceOf[js.Array[js.Dynamic]]
     assertEquals(scripts.length, 1)
@@ -199,17 +210,17 @@ class ManifestSuite extends FunSuite:
     )
 
   test("A page's body and stylesheets come before its scripts."):
-    val html = files(Target.Chrome)("popup.html")
+    val html = files(Target.Chromium)("popup.html")
     assert(html.contains("""<link rel="stylesheet" href="popup.css">"""))
     assert(html.indexOf("popup.css") < html.indexOf("</head>"))
     assert(html.indexOf("""<main id="app">""") < html.indexOf("popup.js"))
 
   test("The popup is a page that loads its bootstrap before the bundle."):
     assertEquals(
-      manifest(Target.Chrome).action.default_popup.asInstanceOf[String],
+      manifest(Target.Chromium).action.default_popup.asInstanceOf[String],
       "popup.html",
     )
-    val html = files(Target.Chrome)("popup.html")
+    val html = files(Target.Chromium)("popup.html")
     assert(html.indexOf("popup.js") < html.indexOf("omnibrowser.js"))
     assert(html.contains("<title>Sample &amp; Co</title>"))
 
@@ -220,7 +231,7 @@ class ManifestSuite extends FunSuite:
         Describe.files(
           Minimal,
           "Minimal",
-          Build(Target.Chrome, "1", "id"),
+          Build(Target.Chromium, "1", "id"),
         )("manifest.json"),
       )
     assert(js.isUndefined(manifest.background))
