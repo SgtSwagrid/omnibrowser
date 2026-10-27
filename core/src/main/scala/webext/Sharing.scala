@@ -2,9 +2,11 @@ package com.alecdorrington.omnibrowser.webext
 
 import cats.effect.{Deferred, IO, Resource}
 import cats.syntax.all.*
-import com.alecdorrington.omnibrowser.{Codec, Message, Shared}
+import com.alecdorrington.omnibrowser.{Message, Shared}
+import com.alecdorrington.omnibrowser.webext.Circe.*
 import com.alecdorrington.omnibrowser.webext.Interop.promise
 import fs2.concurrent.Signal
+import io.circe.{Decoder, Encoder}
 import scala.collection.mutable
 import scala.scalajs.js
 import scala.util.Try
@@ -87,7 +89,7 @@ private[omnibrowser] trait HubApi extends js.Object:
   */
 private final class Owner[A]
   (
-    codec: Codec[A],
+    encoder: Encoder[A],
     signal: Signal[IO, A],
     hub: HubApi,
     launch: IO[Unit] => Unit,
@@ -106,7 +108,7 @@ private final class Owner[A]
   def read(respond: js.Function1[js.Any, Unit]): Unit = launch(
     signal
       .get
-      .map(value => Messages.success(codec.encode(value)))
+      .map(value => Messages.success(encoder.encodeJs(value)))
       .handleError(error => Messages.failure(Messages.reason(error)))
       .flatMap(response => IO(respond(response))),
   )
@@ -118,7 +120,9 @@ private final class Owner[A]
   private def publish(port: PortApi, live: () => Boolean): IO[Unit] = signal
     .discrete
     .foreach(value =>
-      IO(if live() then port.postMessage(Messages.value(codec.encode(value)))),
+      IO(
+        if live() then port.postMessage(Messages.value(encoder.encodeJs(value))),
+      ),
     )
     .compile
     .drain
@@ -200,7 +204,9 @@ private final class Hub(api: RuntimeApi) extends js.Object:
     Messages
       .name(message)
       .filter(_ == Shared.reading)
-      .flatMap(_ => Codec[String].decode(Messages.payload(message)).toOption)
+      .flatMap(_ =>
+        Decoder[String].decodeJs(Messages.payload(message)).toOption,
+      )
       .flatMap(ownersOf(_).headOption)
       .fold(false): owner =>
         owner.read(respond)

@@ -1,5 +1,7 @@
 package com.alecdorrington.omnibrowser
 
+import io.circe.{Codec, Decoder, Encoder}
+
 /** Where the browser keeps the value of a [[StorageKey]]. */
 enum StorageArea(private[omnibrowser] val id: String):
 
@@ -20,30 +22,33 @@ enum StorageArea(private[omnibrowser] val id: String):
 
 /**
   * A value that the extension keeps in the browser's storage, under `name` in
-  * `area`, which is `default` until it is first set.
+  * `area`, which is `default` until it is first set. Its value is kept as JSON,
+  * through circe's codecs.
   */
-final class StorageKey[A]
+final class StorageKey[A : {Encoder, Decoder}]
   (
     val area: StorageArea,
     val name: String,
     val default: A,
-  )
-  (using val codec: Codec[A])
+  ):
+
+  /** The codec of its values. */
+  val codec: Codec[A] = Codec.implied
 
 object StorageKey:
 
   /** A value kept on this device. */
-  def local[A : Codec](name: String, default: A): StorageKey[A] =
+  def local[A : {Encoder, Decoder}](name: String, default: A): StorageKey[A] =
     StorageKey(StorageArea.Local, name, default)
 
   /** A value kept on every device to which the user signs in. */
-  def sync[A : Codec](name: String, default: A): StorageKey[A] =
+  def sync[A : {Encoder, Decoder}](name: String, default: A): StorageKey[A] =
     StorageKey(StorageArea.Sync, name, default)
 
   /** A value kept in memory until the browser closes. */
-  def session[A : Codec](name: String, default: A): StorageKey[A] =
+  def session[A : {Encoder, Decoder}](name: String, default: A): StorageKey[A] =
     StorageKey(StorageArea.Session, name, default)
 
-/** A stored value of the key named `key`, which its codec cannot decode. */
+/** A stored value of the key named `key`, which its decoder cannot decode. */
 final case class StorageError(key: String, reason: String)
   extends Exception(s"The stored value of $key is invalid: $reason")

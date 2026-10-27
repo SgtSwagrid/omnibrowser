@@ -4,6 +4,7 @@ import cats.Eq
 import cats.effect.{IO, Resource}
 import cats.syntax.all.*
 import com.alecdorrington.omnibrowser.*
+import com.alecdorrington.omnibrowser.webext.Circe.*
 import com.alecdorrington.omnibrowser.webext.Interop.{events, promise}
 import fs2.Stream
 import fs2.concurrent.Signal
@@ -69,7 +70,7 @@ private[omnibrowser] final class WebExtensionStorage
   ).flatMap(items => read(key, items.get(key.name)))
 
   override def set[A](key: StorageKey[A], value: A): IO[Unit] =
-    promise(area(key).set(js.Dictionary(key.name -> key.codec.encode(value))))
+    promise(area(key).set(js.Dictionary(key.name -> key.codec.encodeJs(value))))
 
   override def remove[A](key: StorageKey[A]): IO[Unit] =
     promise(area(key).remove(js.Array(key.name)))
@@ -99,7 +100,7 @@ private[omnibrowser] final class WebExtensionStorage
   private def read[A](key: StorageKey[A], json: Option[js.Any]): IO[A] = IO
     .fromEither(
       json
-        .fold(key.default.asRight[String])(key.codec.decode)
+        .fold(key.default.asRight[String])(key.codec.decodeJs)
         .leftMap(StorageError(key.name, _)),
     )
 

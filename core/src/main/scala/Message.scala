@@ -1,17 +1,24 @@
 package com.alecdorrington.omnibrowser
 
+import io.circe.{Codec, Decoder, Encoder}
+
 /**
   * A kind of message that one part of an extension sends the background, which
   * [[BrowserExtension.serve]] answers. Its name must be unique among the
   * extension's messages, and must not begin with `omnibrowser/`, which the
-  * library keeps for its own.
+  * library keeps for its own. Its requests and responses go as JSON, through
+  * circe's codecs.
   */
-final class Message[Req, Res]
-  (val name: String)
-  (
-    using val request: Codec[Req],
-    val response: Codec[Res],
-  )
+final class Message[
+  Req : {Encoder, Decoder},
+  Res : {Encoder, Decoder},
+](val name: String):
+
+  /** The codec of its requests. */
+  val request: Codec[Req] = Codec.implied
+
+  /** The codec of its responses. */
+  val response: Codec[Res] = Codec.implied
 
 object Message:
 
@@ -28,8 +35,10 @@ object Message:
     def name: String = message.name
 
   /** A kind of message to send the content scripts in a tab. */
-  def tab[Req : Codec, Res : Codec](name: String): Tab[Req, Res] =
-    new Tab(Message(name))
+  def tab[
+    Req : {Encoder, Decoder},
+    Res : {Encoder, Decoder},
+  ](name: String): Tab[Req, Res] = new Tab(Message(name))
 
 /**
   * A failure to send or answer the message, or to read the shared value, named

@@ -1,5 +1,7 @@
 package com.alecdorrington.omnibrowser
 
+import io.circe.{Codec, Decoder, Encoder}
+
 /**
   * Values that one part of an extension owns, and shares with the others, which
   * see each new value as the owner gives it.
@@ -13,8 +15,13 @@ object Shared:
     * nothing in a tab shares it, its value there is `default`. Its name must be
     * unique among the extension's shared values.
     */
-  final class Tab[A] private[omnibrowser] (val name: String, val default: A)
-    (using val codec: Codec[A]):
+  final class Tab[A : {Encoder, Decoder}] private[omnibrowser] (
+    val name: String,
+    val default: A,
+  ):
+
+    /** The codec of its values. */
+    val codec: Codec[A] = Codec.implied
 
     /**
       * The message through which the background and pages ask a page for the
@@ -24,7 +31,8 @@ object Shared:
       Message(Shared.reading)
 
   /** A value that the content scripts of each tab may share. */
-  def tab[A : Codec](name: String, default: A): Tab[A] = new Tab(name, default)
+  def tab[A : {Encoder, Decoder}](name: String, default: A): Tab[A] =
+    new Tab(name, default)
 
   /** The name of the message through which a page's shared values are read. */
   private[omnibrowser] val reading = "omnibrowser/shared"

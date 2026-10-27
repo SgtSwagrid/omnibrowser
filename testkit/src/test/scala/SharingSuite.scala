@@ -59,7 +59,7 @@ class SharingSuite extends CatsEffectSuite:
           .flatMap(page => browser.call(Counter.misread, page.tab.get)("two"))
           .attempt,
       )
-      .assertEquals(Left(MessagingError("add", "Expected a number.")))
+      .assertEquals(Left(MessagingError("add", "Int")))
 
   test("A request of a tab fails if the tab closes before it is answered."):
     for
@@ -98,7 +98,10 @@ class SharingSuite extends CatsEffectSuite:
       result  <- browser.shared(Counter.misshared, page.tab.get).attempt
     yield assertEquals(
       result,
-      Left(MessagingError("count", "Expected a string.")),
+      Left(MessagingError(
+        "count",
+        "Got value '0' with wrong type, expecting string",
+      )),
     )
 
   test("A tab whose script shares only something else gives the default."):

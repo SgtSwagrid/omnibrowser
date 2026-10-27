@@ -2,10 +2,10 @@ package com.alecdorrington.omnibrowser.webext
 
 import cats.effect.IO
 import cats.syntax.all.*
-import com.alecdorrington.omnibrowser.{
-  Codec, Message, MessagingError, Sender, Shared,
-}
+import com.alecdorrington.omnibrowser.{Message, MessagingError, Sender, Shared}
+import com.alecdorrington.omnibrowser.webext.Circe.*
 import com.alecdorrington.omnibrowser.webext.Interop.promise
+import io.circe.Decoder
 import scala.scalajs.js
 
 /**
@@ -52,7 +52,7 @@ private[omnibrowser] object Messages:
     .Dynamic
     .literal(
       omnibrowser = message.name,
-      request = message.request.encode(request),
+      request = message.request.encodeJs(request),
     )
 
   /** The name of the message that `json` is a request sent as, if it is one. */
@@ -105,7 +105,7 @@ private[omnibrowser] object Messages:
   def watched[A](shared: Shared.Tab[A], json: js.Any): IO[Option[A]] = IO
     .fromEither(
       field(json, "value")
-        .map(shared.codec.decode(_).map(Some(_)))
+        .map(shared.codec.decodeJs(_).map(Some(_)))
         .orElse(Option.when(hasField(json, "unshared"))(Right(None)))
         .getOrElse(Left("The message holds no value."))
         .leftMap(MessagingError(shared.name, _)),
@@ -120,10 +120,10 @@ private[omnibrowser] object Messages:
     (run: (Req, Sender) => IO[Res])
     : IO[js.Any] = IO
     .fromEither(
-      message.request.decode(request).leftMap(MessagingError(message.name, _)),
+      message.request.decodeJs(request).leftMap(MessagingError(message.name, _)),
     )
     .flatMap(run(_, sender))
-    .map(response => success(message.response.encode(response)))
+    .map(response => success(message.response.encodeJs(response)))
     .handleError(error => failure(reason(error)))
 
   /**
@@ -135,17 +135,16 @@ private[omnibrowser] object Messages:
     case other => Option(other.getMessage).getOrElse(other.toString)
 
   private def decode[Res]
-    (codec: Codec[Res], json: js.Any)
+    (decoder: Decoder[Res], json: js.Any)
     : Either[String, Res] =
     (field(json, "response"), field(json, "error")) match
-      case (Some(response), _) => codec.decode(response)
+      case (Some(response), _) => decoder.decodeJs(response)
       case (None, Some(error)) => Left(stated(error))
       case (None, None)        => Left("Nothing in the extension serves it.")
 
   /** Why a request failed, as its response says. */
   private def stated(error: js.Any): String =
-    if Codec.isNull(error) then "It failed for no stated reason."
-    else error.toString
+    if isNull(error) then "It failed for no stated reason." else error.toString
 
   private def field(json: js.Any, name: String): Option[js.Any] = Option.when(
     hasField(json, name),
@@ -153,6 +152,9 @@ private[omnibrowser] object Messages:
 
   private def isObject(json: js.Any): Boolean = js.typeOf(json) == "object" &&
     json != null
+
+  private def isNull(json: js.Any): Boolean = json == null ||
+    js.isUndefined(json)
 
   private def hasField(json: js.Any, name: String): Boolean = isObject(json) &&
     json.asInstanceOf[js.Object].hasOwnProperty(name)
