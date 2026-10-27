@@ -5,7 +5,7 @@
 - `LaminarPage` and `LaminarContentScript` render an element at the end of their page's body.
 - Extension methods on the browser connect the extension to Airstream: `signal`, `writer` and `updater` for stored values, `signal` for a value that a tab shares, `events` for an `IO` or an fs2 `Stream`, and `observer` to run a program with each event.
 
-Unlike the core library and the testkit, the [plugin](../sbt-omnibrowser) doesn't add it, so add it yourself:
+It is published apart from the core library, which is all that the [plugin](../sbt-omnibrowser) adds, so add it yourself:
 
 ```scala
 libraryDependencies += "com.alecdorrington" %% "omnibrowser-laminar" % omnibrowserVersion.value

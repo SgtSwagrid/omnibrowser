@@ -49,7 +49,7 @@ object OmnibrowserPlugin extends AutoPlugin:
     )
 
     val omnibrowserVersion = settingKey[String](
-      "The version of the plugin, and of the libraries that it adds.",
+      "The version of the plugin, and of the Omnibrowser libraries to use with it.",
     )
 
     // Neither is cached, as each runs the bundle and writes its files.
@@ -134,13 +134,12 @@ object OmnibrowserPlugin extends AutoPlugin:
   )
 
   /**
-    * The libraries that an extension uses, at `version`: the library itself,
-    * and the testkit for its tests.
+    * The libraries that the plugin adds, at `version`: only the library itself,
+    * as the testkit and `omnibrowser-laminar` are published apart, for the
+    * extension to add if it uses them.
     */
-  private def libraries(version: String): Seq[ModuleID] = Seq(
-    "com.alecdorrington" %% "omnibrowser-core"    % version,
-    "com.alecdorrington" %% "omnibrowser-testkit" % version % Test,
-  )
+  private def libraries(version: String): Seq[ModuleID] =
+    Seq("com.alecdorrington" %% "omnibrowser-core" % version)
 
   /** Where the extension is laid out for `mode`, with a directory per target. */
   private def layouts(mode: String): Def.Initialize[File] =
