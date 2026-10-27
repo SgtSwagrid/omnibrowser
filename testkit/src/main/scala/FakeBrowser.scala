@@ -7,6 +7,7 @@ import com.alecdorrington.omnibrowser.launch.PageKind
 import com.alecdorrington.omnibrowser.webext.{
   TabApi, WebExtensionApi, WebExtensionBrowser, WebExtensionTabs,
 }
+import com.alecdorrington.omnibrowser.webext.Circe.*
 import scala.concurrent.duration.*
 import scala.scalajs.js
 
@@ -96,7 +97,7 @@ final class FakeBrowser private (
   /** Stores `value` under `key`, as though another device had synced it. */
   def store[A](key: StorageKey[A], value: A): IO[Unit] = act(simulation.write(
     key.area.id,
-    js.Dictionary(key.name -> key.codec.encode(value)),
+    js.Dictionary(key.name -> key.codec.encodeJs(value)),
   ))
 
   /** The text on the extension's badge, in tabs without their own. */
@@ -168,7 +169,7 @@ final class FakeBrowser private (
   private def decode[A]
     (key: StorageKey[A], json: Option[js.Any])
     : Either[StorageError, A] = json
-    .fold(key.default.asRight[String])(key.codec.decode)
+    .fold(key.default.asRight[String])(key.codec.decodeJs)
     .leftMap(StorageError(key.name, _))
 
 object FakeBrowser:

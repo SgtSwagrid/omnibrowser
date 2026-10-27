@@ -41,7 +41,8 @@ Content scripts get a bundle of their own, holding only what `contentScripts()` 
 | Value of a tab | `Shared.tab[A](name, default)` | Its content script: `share`, from an fs2 `Signal` | The background and pages: `tabs.get`, `tabs.values` |
 | Stored value | `StorageKey.local[A](name, default)` | Any part: `storage.set` | Any part: `storage.get`, `storage.values` |
 
-Values are JSON, through a `Codec`, which `derives Codec` makes for a case class, enum or sealed trait.
+Values are JSON, through [circe](https://circe.github.io/circe/)'s `Encoder` and `Decoder`, which `derives Codec` makes for a case class, enum or sealed trait.
+A `Long` beyond 2<sup>53</sup> loses precision, as JavaScript's numbers hold no more.
 `tabs.values` follows its tab from page to page, giving the default where nothing shares the value.
 
 | Storage area | Keeps a value | Content scripts see it |
@@ -88,6 +89,6 @@ Values are JSON, through a `Codec`, which `derives Codec` makes for a case class
 
 | Package | Holds |
 | --- | --- |
-| `com.alecdorrington.omnibrowser` | The model: `BrowserExtension` and its parts, the `Browser` each part sees, `Message`, `Shared`, `StorageKey`, `Codec` and `Permission` |
+| `com.alecdorrington.omnibrowser` | The model: `BrowserExtension` and its parts, the `Browser` each part sees, `Message`, `Shared`, `StorageKey` and `Permission` |
 | `com.alecdorrington.omnibrowser.webext` | The model over the browser's own API (`WebExtensionBrowser`) |
 | `com.alecdorrington.omnibrowser.launch` | The entry points of the extension's bundles, which start each part where it runs, and give the [plugin](../sbt-omnibrowser) the manifest, bootstraps and pages for each browser |

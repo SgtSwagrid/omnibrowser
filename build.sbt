@@ -34,6 +34,7 @@ lazy val `omnibrowser-core` = project
     Compile / mainClass := None,
     Dependencies.catsEffect,
     Dependencies.scalajsDom,
+    Dependencies.circe,
     Dependencies.munit,
   )
 

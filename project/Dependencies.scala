@@ -9,6 +9,7 @@ object Dependencies:
     val catsEffect = "3.7.1"
     val fs2        = "3.14.0"
     val scalajsDom = "2.8.1"
+    val circe      = "0.14.17"
     val laminar    = "18.0.0-M5"
     val munit      = "1.3.6"
 
@@ -27,6 +28,12 @@ object Dependencies:
 
   lazy val scalajsDom =
     libraryDependencies += "org.scala-js" %% "scalajs-dom" % V.scalajsDom
+
+  /** Circe's codecs, and its conversions between its JSON and JavaScript's. */
+  lazy val circe = libraryDependencies ++= Seq(
+    "io.circe" %% "circe-core"    % V.circe,
+    "io.circe" %% "circe-scalajs" % V.circe,
+  )
 
   lazy val laminar =
     libraryDependencies += "com.raquo" %% "laminar" % V.laminar
