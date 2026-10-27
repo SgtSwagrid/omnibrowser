@@ -124,6 +124,14 @@ final class FakeBrowser private (
   def answerRequests(grant: Boolean): IO[Unit] =
     IO(simulation.grantsRequests = grant)
 
+  /**
+    * Has the browser find each text written in the language, by its code, that
+    * `language` gives for it, and in none where it gives none. Until told
+    * otherwise, it finds none in any text.
+    */
+  def detectLanguages(language: String => Option[String]): IO[Unit] =
+    IO(simulation.languageOf = language)
+
   /** The open tabs, as the extension sees them. */
   def tabs: IO[List[Tab]] = IO(
     simulation

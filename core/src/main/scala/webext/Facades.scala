@@ -11,6 +11,7 @@ private[omnibrowser] trait WebExtensionApi extends js.Object:
 
   val runtime: RuntimeApi         = js.native
   val storage: StorageApi         = js.native
+  val i18n: js.UndefOr[I18nApi]   = js.native
   val tabs: TabsApi               = js.native
   val action: ActionApi           = js.native
   val permissions: PermissionsApi = js.native
@@ -105,6 +106,23 @@ private[omnibrowser] trait StorageAreaApi extends js.Object:
 @js.native
 private[omnibrowser] trait StorageChange extends js.Object:
   val newValue: js.UndefOr[js.Any] = js.native
+
+@js.native
+private[omnibrowser] trait I18nApi extends js.Object:
+
+  def detectLanguage(text: String): js.Promise[LanguageDetectionApi] = js.native
+
+@js.native
+private[omnibrowser] trait LanguageDetectionApi extends js.Object:
+
+  val isReliable: Boolean                      = js.native
+  val languages: js.Array[DetectedLanguageApi] = js.native
+
+@js.native
+private[omnibrowser] trait DetectedLanguageApi extends js.Object:
+
+  val language: String   = js.native
+  val percentage: Double = js.native
 
 @js.native
 private[omnibrowser] trait TabsApi extends js.Object:

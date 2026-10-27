@@ -17,6 +17,7 @@ private[testkit] final class FakeApi
 
   val runtime: FakeRuntime = FakeRuntime(simulation, context)
   val storage: FakeStorage = FakeStorage(simulation, context)
+  val i18n: FakeI18n       = FakeI18n(simulation)
 
   val tabs: js.UndefOr[FakeTabs] =
     if context.kind.isContent then js.undefined
@@ -125,6 +126,14 @@ private[testkit] final class FakeStorageArea
 
   def remove(keys: js.Array[String]): js.Promise[Unit] =
     simulation.access(context, area)(simulation.delete(area, keys))
+
+/** The browser's `i18n`, whose detector of languages Safari's lacks. */
+private[testkit] final class FakeI18n(simulation: Simulation) extends js.Object:
+
+  val detectLanguage: js.UndefOr[js.Function1[String, js.Promise[js.Object]]] =
+    if simulation.detects then
+      (text: String) => js.Promise.resolve(simulation.detect(text))
+    else js.undefined
 
 private[testkit] final class FakeTabs
   (

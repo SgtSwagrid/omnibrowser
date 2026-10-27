@@ -26,6 +26,7 @@ Content scripts get a bundle of their own, holding only what `contentScripts()` 
 | `browser.` | Background | Pages | Content scripts |
 | --- | :-: | :-: | :-: |
 | `storage` | ✅ | ✅ | ✅ |
+| `languages`: `detect`, the languages of text (none in Safari) | ✅ | ✅ | ✅ |
 | `tabs`: `all`, `active`, `open` | ✅ | ✅ | |
 | `tabs`: `call`, `get`, `values` | ✅ | ✅ | |
 | `action`: the toolbar badge | ✅ | ✅ | |
