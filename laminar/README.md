@@ -11,4 +11,12 @@ Unlike the core library and the testkit, the [plugin](../sbt-omnibrowser) doesn'
 libraryDependencies += "com.alecdorrington" %% "omnibrowser-laminar" % omnibrowserVersion.value
 ```
 
+| Binding | Worth knowing |
+| --- | --- |
+| `signal(key)` | It is the key's default until the value has been read. |
+| `signal(value, tab)` | Only pages and the background have it. It follows the tab as `browser.tabs.values` does. |
+| `updater(key)((value, event: E) => ...)` | It transforms the stored value with each event, as Airstream's `Var.updater` does. Scala cannot infer the event's type from `-->`, so name it. |
+| `events(stream)` | The fs2 `Stream` runs while anything observes the event stream. |
+| `observer(event => program)` | It runs the program at once, as `browser.run` does, so that a request for permissions still sees the user's input. |
+
 See [Laminar](../README.md#-laminar) in the main README.
