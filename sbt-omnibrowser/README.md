@@ -16,9 +16,11 @@ It then runs the first under Node, which gives the extension's manifest, a small
 | `omnibrowserExtension` | The only object extending `BrowserExtension` | The object defining the extension, as `Some("com.example.WordCount")` |
 | `omnibrowserAssets` | `src/main/extension` | The files copied into the extension as they are, such as its icons |
 | `omnibrowserGeckoId` | `<normalizedName>@<organization>` | The extension's ID in Firefox |
-| `omnibrowserVersion` | The plugin's own | The version of the libraries that it adds |
+| `omnibrowserVersion` | The plugin's own | The version of the Omnibrowser libraries to use with it |
 
-It adds [`omnibrowser-core`](../core) and [`omnibrowser-testkit`](../testkit) to the project at `omnibrowserVersion`, and builds the extension before each test run, so that the tests may run it as built.
+It adds only [`omnibrowser-core`](../core), whose entry points it builds the extension from, to the project at `omnibrowserVersion`.
+The [testkit](../testkit) and [`omnibrowser-laminar`](../laminar) are the project's to add, at the same version.
+It builds the extension before each test run, so that the tests may run it as built.
 As sbt runs it, it is compiled with sbt's own Scala version.
 
 See [the main README](../README.md) for how to install it.

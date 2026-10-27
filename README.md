@@ -19,6 +19,9 @@ addSbtPlugin("com.alecdorrington" % "sbt-omnibrowser" % "0.5.0")
 // build.sbt
 lazy val extension = project.enablePlugins(OmnibrowserPlugin)
 
+// build.sbt, to test it in a fake browser
+libraryDependencies += "com.alecdorrington" %% "omnibrowser-testkit" % omnibrowserVersion.value % Test
+
 // build.sbt, to write pages with Laminar
 libraryDependencies += "com.alecdorrington" %% "omnibrowser-laminar" % omnibrowserVersion.value
 ```
