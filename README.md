@@ -54,7 +54,6 @@ object WordCount extends BrowserExtension[Permission.Storage]:
 | [`omnibrowser-testkit`](testkit) | Testing it in a fake browser |
 | [`omnibrowser-laminar`](laminar) | Writing its pages with [Laminar](https://laminar.dev) |
 | [`example`](example) | An example extension, with a Laminar popup and tests (not published) |
-| [`sharing`](sharing) | An extension that tests the values that content scripts share (not published) |
 
 ## 👁️ See also
 
