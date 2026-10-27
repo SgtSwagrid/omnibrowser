@@ -33,6 +33,7 @@ This is a Scala library for writing browser extensions against a typed model of 
   `signal`'s two overloads (a key's, and a tab's value's) share one generic receiver, `[B <: ContentBrowser]`, the tab's asking for `B <:< Browser`: Scala picks among extension overloads by receiver before the arguments, so a separate `extension (browser: Browser)` hides `signal(key)` from pages, and duplicating it there is ambiguous.
 - `sharing`: an extension (`Relay`) whose content scripts share a value in each way that a page's may, tested in-process and built for both browsers.
 - `example`: an extension built with both, whose popup is Laminar's, and tested with the testkit in both ways. The output is under `target/out/sjs1/scala-3.9.0/omnibrowser-example/omnibrowser/`.
+- Each subproject has a short `README.md` of what it is for, which links to the main README for usage. Keep it current as the subproject changes, and give a new subproject one.
 - The plugin makes every test run build the extension first (through `Test / jsEnvInput`, as `test` is an input task in sbt 2), and tells the tests where it is through `OMNIBROWSER_BUILD`.
 
 - `launch.AndroidSupport` lists the permissions that Firefox for Android lacks, from MDN's browser-compat-data (`webextensions/manifest/permissions.json` and `optional_permissions.json`, where `firefox_android` is `false`). Update it from there as permissions are modelled.
