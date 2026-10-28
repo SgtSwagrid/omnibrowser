@@ -21,8 +21,13 @@ class WordCountSuite extends FunSuite:
   )
 
   test(
-    "The extension has a background, a content script and a popup, each of whose bootstraps names it.",
+    "The extension has a background, a content script and a popup, each of whose bootstraps names it, and requests only the storage permission.",
   ):
+    val manifest = js.JSON.parse(files(Target.Firefox)("manifest.json"))
+    assertEquals(
+      manifest.permissions.asInstanceOf[js.Array[String]].toList,
+      List("storage"),
+    )
     val all = files(Target.Chromium)
     assertEquals(
       all.keySet,

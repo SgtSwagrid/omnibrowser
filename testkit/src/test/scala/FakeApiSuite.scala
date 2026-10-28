@@ -61,14 +61,20 @@ class FakeApiSuite extends CatsEffectSuite:
           .onChanged
           .addListener((() => heard += "other"): js.Function0[Unit]),
       )
-      _ <- IO(simulation.write("local", js.Dictionary("key" -> 1)))
-      _ <- IO(
+      _      <- IO(simulation.write("local", js.Dictionary("key" -> 1)))
+      atOnce <- IO(activity.status.failures.size)
+      _      <- IO(
         simulation.later(throw IllegalStateException("Deliberately failed.")),
       )
       _ <- IO.sleep(20.millis)
     yield
       assertEquals(heard.toList, List("other"))
-      assertEquals(activity.status.failures.size, 2)
+      assertEquals(atOnce, 1, "the failure at once")
+      assertEquals(
+        activity.status.failures.size - atOnce,
+        1,
+        "the failure in a later event",
+      )
 
   test(
     "A message that reaches no listener is rejected, and a page that has gone can neither send nor store anything.",

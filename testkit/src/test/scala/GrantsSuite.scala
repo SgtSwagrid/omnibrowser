@@ -9,19 +9,20 @@ import munit.CatsEffectSuite
 class GrantsSuite extends CatsEffectSuite:
 
   test(
-    "An optional permission gives evidence of it only once the user grants it, which lets the extension use its APIs.",
+    "An optional permission gives evidence of it only once the user grants it, as the fake user does unless told otherwise, which lets the extension use its APIs.",
   ):
     for
-      browser    <- FakeBrowser.install(Asker)
-      _          <- browser.visit("https://example.com/")
+      browser <- FakeBrowser.install(Asker)
+      _       <- browser.visit("https://example.com/")
+      // Asked before the fake user is told anything, so granted by default.
+      remembered <- browser.call(Asker.remember)("hello")
+      note       <- browser.stored(Asker.note)
       _          <- browser.answerRequests(false)
       refused    <- browser.call(Asker.ask)(())
       before     <- browser.tabs
       _          <- browser.answerRequests(true)
       granted    <- browser.call(Asker.ask)(())
       after      <- browser.tabs
-      remembered <- browser.call(Asker.remember)("hello")
-      note       <- browser.stored(Asker.note)
     yield
       assertEquals(
         (refused, granted, remembered),
