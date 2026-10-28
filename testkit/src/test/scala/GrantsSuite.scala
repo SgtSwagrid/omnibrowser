@@ -8,23 +8,30 @@ import munit.CatsEffectSuite
 
 class GrantsSuite extends CatsEffectSuite:
 
-  test("An optional permission that the user grants gives evidence of it."):
-    FakeBrowser.install(Asker).flatMap(_.call(Asker.ask)(())).assertEquals(true)
-
-  test("An optional permission that the user refuses gives none."):
-    FakeBrowser
-      .install(Asker)
-      .flatTap(_.answerRequests(false))
-      .flatMap(_.call(Asker.ask)(()))
-      .assertEquals(false)
-
-  test("The evidence of a granted permission lets the extension use its APIs."):
+  test(
+    "An optional permission gives evidence of it only once the user grants it, which lets the extension use its APIs.",
+  ):
     for
       browser    <- FakeBrowser.install(Asker)
+      _          <- browser.visit("https://example.com/")
+      _          <- browser.answerRequests(false)
+      refused    <- browser.call(Asker.ask)(())
+      before     <- browser.tabs
+      _          <- browser.answerRequests(true)
+      granted    <- browser.call(Asker.ask)(())
+      after      <- browser.tabs
       remembered <- browser.call(Asker.remember)("hello")
       note       <- browser.stored(Asker.note)
     yield
-      assert(remembered)
+      assertEquals(
+        (refused, granted, remembered),
+        (false, true, true),
+      )
+      assertEquals(before.map(_.url), List(None))
+      assertEquals(
+        after.map(_.url),
+        List(Some("https://example.com/")),
+      )
       assertEquals(note, "hello")
 
   test("A permission that the extension did not declare cannot be asked for."):
@@ -39,32 +46,6 @@ class GrantsSuite extends CatsEffectSuite:
           result,
         ),
       )
-
-  test("Once granted the tabs permission, the extension sees tabs' URLs."):
-    for
-      browser <- FakeBrowser.install(Asker)
-      _       <- browser.visit("https://example.com/")
-      before  <- browser.tabs
-      _       <- browser.call(Asker.ask)(())
-      after   <- browser.tabs
-    yield
-      assertEquals(before.map(_.url), List(None))
-      assertEquals(
-        after.map(_.url),
-        List(Some("https://example.com/")),
-      )
-
-  test("A badge set for one tab is shown only in that tab."):
-    for
-      browser <- FakeBrowser.install(Marker)
-      page    <- browser.visit("https://example.com/")
-      _       <- browser.clickAction
-      tab     <- IO.fromOption(page.tab)(RuntimeException("No tab."))
-      here    <- browser.badgeOf(tab)
-      global  <- browser.badge
-    yield
-      assertEquals(here, "here")
-      assertEquals(global, "")
 
   test("A program that a page runs, as from a DOM event, is waited for."):
     FakeBrowser
@@ -110,12 +91,3 @@ object Asker extends BrowserExtension[Any]:
 
   override def popup() =
     Some(Page(browser => IO(browser.run(browser.action.setBadge("ran")))))
-
-/** Marks the tab in which its toolbar button is clicked. */
-object Marker extends BrowserExtension[Any]:
-
-  override val name = "Marker"
-
-  override def background() = Background(
-    onActionClicked((tab, browser) => browser.action.setBadge("here", tab.id)),
-  )

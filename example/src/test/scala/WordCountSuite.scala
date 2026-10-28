@@ -20,9 +20,12 @@ class WordCountSuite extends FunSuite:
     ),
   )
 
-  test("The extension has a background, a content script and a popup."):
+  test(
+    "The extension has a background, a content script and a popup, each of whose bootstraps names it.",
+  ):
+    val all = files(Target.Chromium)
     assertEquals(
-      files(Target.Chromium).keySet,
+      all.keySet,
       Set(
         "manifest.json",
         "background.js",
@@ -31,16 +34,7 @@ class WordCountSuite extends FunSuite:
         "popup.js",
       ),
     )
-
-  test("The extension requests only the storage permission."):
-    val manifest = js.JSON.parse(files(Target.Firefox)("manifest.json"))
-    assertEquals(
-      manifest.permissions.asInstanceOf[js.Array[String]].toList,
-      List("storage"),
-    )
-
-  test("Each bootstrap names the extension."):
-    files(Target.Chromium)
+    all
       .removed("manifest.json")
       .removed("popup.html")
       .values

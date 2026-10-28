@@ -1,6 +1,7 @@
 package com.alecdorrington.omnibrowser.testkit
 
 import cats.effect.IO
+import cats.syntax.all.*
 import com.alecdorrington.omnibrowser.*
 import com.alecdorrington.omnibrowser.Permission.{Storage, Tabs}
 import munit.CatsEffectSuite
@@ -8,27 +9,24 @@ import org.scalajs.dom.document
 
 class FakeBrowserSuite extends CatsEffectSuite:
 
-  test("Installing the extension reports its installation to the background."):
-    FakeBrowser.install(Probe).flatMap(_.stored(Probe.installs)).assertEquals(1)
-
-  test("A request is answered by the background that serves its message."):
-    FakeBrowser
-      .install(Probe)
-      .flatMap(_.call(Probe.echo)("stressed"))
-      .assertEquals("desserts")
-
-  test("A request that its server fails gives the server's error."):
-    FakeBrowser
-      .install(Probe)
-      .flatMap(_.call(Probe.fail)(()).attempt)
-      .map(result =>
-        assertEquals(
-          result,
-          Left(MessagingError("fail", "Deliberately failed.")),
-        ),
+  test(
+    "Installing the extension reports its installation to the background, which answers each request with what its server gives, or its server's error.",
+  ):
+    for
+      browser  <- FakeBrowser.install(Probe)
+      installs <- browser.stored(Probe.installs)
+      echoed   <- browser.call(Probe.echo)("stressed")
+      failed   <- browser.call(Probe.fail)(()).attempt
+    yield
+      assertEquals((installs, echoed), (1, "desserts"))
+      assertEquals(
+        failed,
+        Left(MessagingError("fail", "Deliberately failed.")),
       )
 
-  test("Content scripts are injected only into the pages that they match."):
+  test(
+    "Content scripts are injected only into the pages that they match, and a failure in one fails the action that started it.",
+  ):
     for
       browser <- FakeBrowser.install(Probe)
       _       <- browser.visit("https://example.com/", "first")
@@ -36,58 +34,38 @@ class FakeBrowserSuite extends CatsEffectSuite:
         "https://www.example.com/page",
         "second",
       )
-      _    <- browser.visit("https://example.org/", "elsewhere")
-      seen <- browser.stored(Probe.seen)
-    yield assertEquals(seen, List("second", "first"))
-
-  test("A failure in a content script fails the action that started it."):
-    FakeBrowser
-      .install(Probe)
-      .flatMap(_.visit("https://secret.test/").attempt)
-      .map(result =>
-        assert(
-          result.left.exists(_.getMessage.contains("not allowed")),
-          s"Content scripts may not use session storage, yet gave $result.",
-        ),
+      _      <- browser.visit("https://example.org/", "elsewhere")
+      seen   <- browser.stored(Probe.seen)
+      secret <- browser.visit("https://secret.test/").attempt
+    yield
+      assertEquals(seen, List("second", "first"))
+      assert(
+        secret.left.exists(_.getMessage.contains("not allowed")),
+        s"Content scripts may not use session storage, yet gave $secret.",
       )
 
-  test("A page sees each change to the values that it watches."):
-    for
-      browser <- FakeBrowser.install(Probe)
-      _       <- browser.visit("https://example.com/", "first")
-      popup   <- browser.openPopup
-      before  <- popup.text
-      _       <- browser.store(Probe.seen, List("synced", "elsewhere"))
-      after   <- popup.text
-    yield
-      assertEquals(before, "first")
-      assertEquals(after, "synced, elsewhere")
-
-  test("A stored value that cannot be decoded is its default until set again."):
+  test(
+    "A page sees each change to the values that it watches, and a stored value that cannot be decoded is its default until set again.",
+  ):
     for
       browser <- FakeBrowser.install(Probe)
       _       <- browser.store(Probe.misstored, "not a list")
-      before  <- browser.stored(Probe.seen)
+      default <- browser.stored(Probe.seen)
       _       <- browser.visit("https://example.com/", "first")
-      after   <- browser.stored(Probe.seen)
-    yield
-      assertEquals(before, Nil)
-      assertEquals(after, List("first"))
-
-  test("A page goes on watching a value after one that cannot be decoded."):
-    for
-      browser <- FakeBrowser.install(Probe)
       popup   <- browser.openPopup
-      _       <- browser.store(Probe.seen, List("synced"))
-      before  <- popup.text
+      first   <- popup.text
+      _       <- browser.store(Probe.seen, List("synced", "elsewhere"))
+      synced  <- popup.text
       _       <- browser.store(Probe.misstored, "not a list")
       invalid <- popup.text
       _       <- browser.store(Probe.seen, List("again"))
-      after   <- popup.text
-    yield assertEquals(
-      (before, invalid, after),
-      ("synced", "", "again"),
-    )
+      again   <- popup.text
+    yield
+      assertEquals(default, Nil)
+      assertEquals(
+        (first, synced, invalid, again),
+        ("first", "synced, elsewhere", "", "again"),
+      )
 
   test("An extension without the page asked for cannot open it."):
     FakeBrowser
@@ -100,24 +78,20 @@ class FakeBrowserSuite extends CatsEffectSuite:
         ),
       )
 
-  test("The toolbar button's click is heard by an extension without a popup."):
-    for
-      browser <- FakeBrowser.install(Clicker)
-      _       <- browser.visit("https://example.com/")
-      _       <- browser.clickAction
-      badge   <- browser.badge
-    yield assertEquals(badge, "https://example.com/")
-
-  test("An extension without the tabs permission cannot see a tab's URL."):
-    for
-      browser <- FakeBrowser.install(Blind)
-      _       <- browser.visit("https://example.com/")
-      _       <- browser.clickAction
-      badge   <- browser.badge
-      tabs    <- browser.tabs
-    yield
-      assertEquals(badge, "unknown")
-      assertEquals(tabs.map(_.url), List(None))
+  test(
+    "The toolbar button's click is heard by an extension without a popup, which sees the tab's URL only with the tabs permission.",
+  ):
+    Seq[(BrowserExtension[?], String)](
+      Clicker -> "https://example.com/",
+      Blind   -> "unknown",
+    ).traverse_((extension, url) =>
+      for
+        browser <- FakeBrowser.install(extension)
+        _       <- browser.visit("https://example.com/")
+        _       <- browser.clickAction
+        badge   <- browser.badge
+      yield assertEquals(badge, url, extension.name),
+    )
 
 /** An extension that exercises each part of the fake browser. */
 object Probe extends BrowserExtension[Storage]:

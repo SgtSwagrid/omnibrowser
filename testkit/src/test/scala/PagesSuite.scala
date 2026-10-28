@@ -9,33 +9,27 @@ import org.scalajs.dom.document
 
 class PagesSuite extends CatsEffectSuite:
 
-  test("A page begins with the body that the extension gives it."):
-    FakeBrowser
-      .install(Form)
-      .flatMap(_.openPopup)
-      .flatMap(_.text("h1"))
-      .assertEquals("Sign the guestbook")
-
-  test("A click on an element reaches its handlers."):
-    for
-      browser <- FakeBrowser.install(Form)
-      popup   <- browser.openPopup
-      _       <- popup.click("button")
-      signed  <- browser.stored(Form.signed)
-    yield assert(signed)
-
   test(
-    "Text entered into a field becomes its value, of which its handlers hear.",
+    "A page begins with the body that the extension gives it, whose elements' handlers hear clicks and text entered, which becomes a field's value, but an element that it lacks cannot be acted on.",
   ):
     for
       browser <- FakeBrowser.install(Form)
       popup   <- browser.openPopup
+      heading <- popup.text("h1")
+      _       <- popup.click("button")
+      signed  <- browser.stored(Form.signed)
       _       <- popup.enter("input", "Ada")
       value   <- popup.value("input")
       name    <- browser.stored(Form.guest)
+      missing <- popup.click("textarea").attempt
     yield
-      assertEquals(value, "Ada")
-      assertEquals(name, "Ada")
+      assertEquals(heading, "Sign the guestbook")
+      assert(signed)
+      assertEquals((value, name), ("Ada", "Ada"))
+      assertEquals(
+        missing,
+        Left(NoSuchElement("textarea")),
+      )
 
   test("A tab's text is its body's, as both its text and inner text."):
     for
@@ -46,18 +40,6 @@ class PagesSuite extends CatsEffectSuite:
     yield
       assertEquals(text, "Hello.")
       assertEquals(inner, "Hello.")
-
-  test("An element that the page lacks cannot be acted on."):
-    FakeBrowser
-      .install(Form)
-      .flatMap(_.openPopup)
-      .flatMap(_.click("textarea").attempt)
-      .map(result =>
-        assertEquals(
-          result,
-          Left(NoSuchElement("textarea")),
-        ),
-      )
 
 /** A guestbook, whose popup the user signs. */
 object Form extends BrowserExtension[Storage]:

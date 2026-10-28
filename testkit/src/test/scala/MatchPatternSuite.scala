@@ -4,73 +4,25 @@ import munit.FunSuite
 
 class MatchPatternSuite extends FunSuite:
 
-  private def check
-    (
-      pattern: String,
-      url: String,
-      expected: Boolean,
+  test(
+    "A wildcard matches HTTP and HTTPS as the scheme, the domain and its subdomains as a label, and anything in the path, and `<all_urls>` every web page.",
+  ):
+    Seq(
+      ("*://example.com/", "http://example.com/", true),
+      ("*://example.com/", "https://example.com/", true),
+      ("*://example.com/", "file://example.com/", false),
+      ("https://*.example.com/", "https://example.com/", true),
+      ("https://*.example.com/", "https://a.b.example.com/", true),
+      ("https://*.example.com/", "https://notexample.com/", false),
+      ("https://example.com/a*z", "https://example.com/a/b/z", true),
+      ("https://example.com/a*z", "https://example.com/a/b/y", false),
+      ("https://example.com/", "https://example.com/page", false),
+      ("<all_urls>", "https://example.com/page", true),
+      ("<all_urls>", "about:blank", false),
+    ).foreach((pattern, url, expected) =>
+      assertEquals(
+        MatchPattern.matches(pattern, url),
+        expected,
+        s"$pattern, $url",
+      ),
     )
-    : Unit = assertEquals(
-    MatchPattern.matches(pattern, url),
-    expected,
-    s"$pattern, $url",
-  )
-
-  test("A wildcard scheme matches HTTP and HTTPS, but not files."):
-    check(
-      "*://example.com/",
-      "http://example.com/",
-      true,
-    )
-    check(
-      "*://example.com/",
-      "https://example.com/",
-      true,
-    )
-    check(
-      "*://example.com/",
-      "file://example.com/",
-      false,
-    )
-
-  test("A wildcard label matches the domain and each of its subdomains."):
-    check(
-      "https://*.example.com/",
-      "https://example.com/",
-      true,
-    )
-    check(
-      "https://*.example.com/",
-      "https://a.b.example.com/",
-      true,
-    )
-    check(
-      "https://*.example.com/",
-      "https://notexample.com/",
-      false,
-    )
-
-  test("A wildcard in the path matches anything there."):
-    check(
-      "https://example.com/a*z",
-      "https://example.com/a/b/z",
-      true,
-    )
-    check(
-      "https://example.com/a*z",
-      "https://example.com/a/b/y",
-      false,
-    )
-    check(
-      "https://example.com/",
-      "https://example.com/page",
-      false,
-    )
-
-  test("Every web page matches `<all_urls>`."):
-    check(
-      "<all_urls>",
-      "https://example.com/page",
-      true,
-    )
-    check("<all_urls>", "about:blank", false)
