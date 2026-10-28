@@ -1,6 +1,7 @@
 package com.alecdorrington.omnibrowser.testkit
 
 import cats.effect.IO
+import cats.syntax.all.*
 import com.alecdorrington.omnibrowser.*
 import com.alecdorrington.omnibrowser.webext.{I18nApi, WebExtensionLanguages}
 import munit.CatsEffectSuite
@@ -29,28 +30,24 @@ class LanguagesSuite extends CatsEffectSuite:
     .Dynamic
     .literal(detectLanguage = detector)
 
-  test("The background finds the language of a text as the browser does."):
+  test(
+    "The background and content scripts find the language of a text as the browser does, and none where it cannot tell.",
+  ):
     for
       browser <- FakeBrowser.install(Linguist)
+      unknown <- browser.call(Linguist.detect)("Hallo Welt")
       _       <- browser.detectLanguages(greeting)
       found   <- browser.call(Linguist.detect)("Hallo Welt")
-    yield assertEquals(found, german)
-
-  test("A text that the browser cannot tell the language of is found in none."):
-    FakeBrowser
-      .install(Linguist)
-      .flatMap(_.call(Linguist.detect)("Hallo Welt"))
-      .assertEquals(Detection.none)
-
-  test("A content script finds the language of its page."):
-    for
-      browser <- FakeBrowser.install(Linguist)
-      _       <- browser.detectLanguages(greeting)
-      german  <- browser.visit("https://example.com/", "Hallo Welt")
-      english <- browser.visit("https://example.org/", "Hello world")
-      first   <- browser.badgeOf(german.tab.get)
-      second  <- browser.badgeOf(english.tab.get)
-    yield assertEquals((first, second), ("de", "?"))
+      hallo   <- browser.visit("https://example.com/", "Hallo Welt")
+      hello   <- browser.visit("https://example.org/", "Hello world")
+      first   <- browser.badgeOf(hallo.tab.get)
+      second  <- browser.badgeOf(hello.tab.get)
+    yield
+      assertEquals(
+        (unknown, found),
+        (Detection.none, german),
+      )
+      assertEquals((first, second), ("de", "?"))
 
   test("A text's language is the one of the most of it, if found reliably."):
     val mixed = List(
@@ -67,20 +64,10 @@ class LanguagesSuite extends CatsEffectSuite:
     )
     assertEquals(Detection.none.language, None)
 
-  test("A browser with no detector, as Safari, finds no language in any text."):
-    detect(js.Dynamic.literal()).assertEquals(Detection.none) *>
-      detect(js.undefined).assertEquals(Detection.none)
-
   test(
-    "A detector that fails, as Firefox for Android's did before 106, finds none.",
+    "A browser's detector gives the share of a text in each language as a whole percentage, or none where it is missing, as Safari's is, or fails, as Firefox for Android's did before 106.",
   ):
-    detect(detecting(_ => throw js.JavaScriptException(js.Error("No."))))
-      .assertEquals(Detection.none) *> detect(
-        detecting(_ => js.Promise.reject(js.Error("No."))),
-      ).assertEquals(Detection.none)
-
-  test("The share of a text in each language is a whole percentage."):
-    detect(detecting(_ =>
+    val sharing = detecting(_ =>
       js.Promise
         .resolve(
           js.Dynamic
@@ -90,10 +77,23 @@ class LanguagesSuite extends CatsEffectSuite:
                 js.Array(js.Dynamic.literal(language = "de", percentage = 79.6)),
             ),
         ),
-    )).assertEquals(Detection(
-      List(DetectedLanguage("de", 80)),
-      reliable = true,
-    ))
+    )
+    List[(js.UndefOr[js.Object], Detection)](
+      (js.Dynamic.literal(), Detection.none),
+      (js.undefined, Detection.none),
+      (
+        detecting(_ => throw js.JavaScriptException(js.Error("No."))),
+        Detection.none,
+      ),
+      (detecting(_ => js.Promise.reject(js.Error("No."))), Detection.none),
+      (
+        sharing,
+        Detection(
+          List(DetectedLanguage("de", 80)),
+          reliable = true,
+        ),
+      ),
+    ).traverse_((api, expected) => detect(api).assertEquals(expected))
 
 /** Finds the languages of texts, and of each page that it sees. */
 object Linguist extends BrowserExtension[Any]:

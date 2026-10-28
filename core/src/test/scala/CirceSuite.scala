@@ -18,34 +18,34 @@ class CirceSuite extends FunSuite:
       Right(value),
     )
 
-  test("Primitives survive serialisation."):
+  test("Primitives, collections and derived values survive serialisation."):
     roundTrip("text")
     roundTrip(true)
     roundTrip(1.5)
     roundTrip(42)
     roundTrip(())
-
-  test("Collections survive serialisation."):
     roundTrip(List(1, 2, 3))
     roundTrip(Map("a" -> List("x"), "b" -> Nil))
     roundTrip(Option(1))
     roundTrip(Option.empty[Int])
-
-  test("Derived values survive serialisation."):
     roundTrip(Word("chat", Some("le chat")))
     roundTrip[Shape](Shape.Circle(2))
     roundTrip[Shape](Shape.Dot)
 
-  test("A missing optional field is none."):
+  test(
+    "A missing optional field is none, but a value of the wrong type, or that JSON cannot hold, is rejected, saying where.",
+  ):
     assertEquals(
       Decoder[Word].decodeJs(js.Dynamic.literal(text = "chat")),
       Right(Word("chat", None)),
     )
-
-  test("A value of the wrong type is rejected, saying where."):
     assertEquals(
       Decoder[Word].decodeJs(js.Dynamic.literal(text = 1)),
       Left(".text: Got value '1' with wrong type, expecting string"),
+    )
+    assertEquals(
+      Decoder[String].decodeJs(js.Symbol()),
+      Left("Expected JSON, not a symbol."),
     )
 
   test("A value from another realm is decoded."):
@@ -56,12 +56,6 @@ class CirceSuite extends FunSuite:
           .asInstanceOf[js.Any],
       ),
       Right(List(Word("chat", Some("le chat")))),
-    )
-
-  test("A value that JSON cannot hold is rejected."):
-    assertEquals(
-      Decoder[String].decodeJs(js.Symbol()),
-      Left("Expected JSON, not a symbol."),
     )
 
 final case class Word(text: String, context: Option[String]) derives Codec

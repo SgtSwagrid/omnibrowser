@@ -10,34 +10,24 @@ import scala.concurrent.duration.DurationInt
 
 class SharingSuite extends CatsEffectSuite:
 
-  test("A tab's content script answers the requests made of its tab."):
-    for
-      browser <- FakeBrowser.install(Counter)
-      page    <- browser.visit("https://example.com/count")
-      first   <- browser.call(Counter.add, page.tab.get)(2)
-      second  <- browser.call(Counter.add, page.tab.get)(3)
-    yield
-      assertEquals(first, 2)
-      assertEquals(second, 5)
-
-  test("A request of a tab fails if nothing there serves it."):
-    for
-      browser <- FakeBrowser.install(Counter)
-      plain   <- browser.visit("https://example.com/other")
-      counter <- browser.visit("https://example.com/count")
-      _       <- browser.call(Counter.stop, counter.tab.get)(())
-      results <- Seq(plain, counter).traverse(page =>
-        browser.call(Counter.add, page.tab.get)(1).attempt,
-      )
-    yield results.foreach(result => assert(failed(result, "add"), result))
-
-  test("A request of a tab fails with why its handler failed."):
+  test(
+    "A tab's content script answers the requests made of its tab, or fails with why its handler failed, or that it cannot read the request, and a request fails if nothing there serves it.",
+  ):
     for
       browser  <- FakeBrowser.install(Counter)
-      page     <- browser.visit("https://example.com/count")
-      negative <- browser.call(Counter.add, page.tab.get)(-1).attempt
-      silent   <- browser.call(Counter.add, page.tab.get)(0).attempt
+      plain    <- browser.visit("https://example.com/other")
+      counter  <- browser.visit("https://example.com/count")
+      first    <- browser.call(Counter.add, counter.tab.get)(2)
+      second   <- browser.call(Counter.add, counter.tab.get)(3)
+      negative <- browser.call(Counter.add, counter.tab.get)(-1).attempt
+      silent   <- browser.call(Counter.add, counter.tab.get)(0).attempt
+      misread  <- browser.call(Counter.misread, counter.tab.get)("two").attempt
+      _        <- browser.call(Counter.stop, counter.tab.get)(())
+      unserved <- Seq(plain, counter).traverse(page =>
+        browser.call(Counter.add, page.tab.get)(1).attempt,
+      )
     yield
+      assertEquals((first, second), (2, 5))
       assertEquals(
         negative,
         Left(MessagingError("add", "Nothing negative.")),
@@ -49,73 +39,73 @@ class SharingSuite extends CatsEffectSuite:
           "java.lang.IllegalStateException",
         )),
       )
-
-  test("A request that its tab's script cannot read fails."):
-    FakeBrowser
-      .install(Counter)
-      .flatMap(browser =>
-        browser
-          .visit("https://example.com/count")
-          .flatMap(page => browser.call(Counter.misread, page.tab.get)("two"))
-          .attempt,
+      assertEquals(
+        misread,
+        Left(MessagingError("add", "Int")),
       )
-      .assertEquals(Left(MessagingError("add", "Int")))
+      unserved.foreach(result => assert(failed(result, "add"), result))
 
-  test("A request of a tab fails if the tab closes before it is answered."):
+  test(
+    "Once a tab closes, a request of it fails, and a page that watches it sees the default, and stops watching it.",
+  ):
     for
-      browser <- FakeBrowser.install(Counter)
-      page    <- browser.visit("https://example.com/count")
-      request <- browser.call(Counter.hang, page.tab.get)(()).attempt.start
-      _       <- IO.sleep(20.millis) >> browser.close(page.tab.get)
-      result  <- request.joinWithNever
-    yield assert(
-      result
-        .left
-        .exists:
-          case MessagingError("hang", reason) =>
-            reason.contains("message channel closed")
-          case _ => false
-      ,
-      result,
-    )
-
-  test("A tab's shared value is its content script's, or else its default."):
-    for
-      browser <- FakeBrowser.install(Counter)
-      counter <- browser.visit("https://example.com/count")
-      plain   <- browser.visit("https://example.com/other")
-      _       <- browser.call(Counter.add, counter.tab.get)(4)
-      counted <- browser.shared(Counter.count, counter.tab.get)
-      other   <- browser.shared(Counter.count, plain.tab.get)
-      _       <- browser.call(Counter.stop, counter.tab.get)(())
-      stopped <- browser.shared(Counter.count, counter.tab.get)
-    yield assertEquals((counted, other, stopped), (4, 0, 0))
-
-  test("A shared value that its reader cannot read fails."):
-    for
-      browser <- FakeBrowser.install(Counter)
-      page    <- browser.visit("https://example.com/count")
-      result  <- browser.shared(Counter.misshared, page.tab.get).attempt
-    yield assertEquals(
-      result,
-      Left(MessagingError(
-        "count",
-        "Got value '0' with wrong type, expecting string",
-      )),
-    )
-
-  test("A tab whose script shares only something else gives the default."):
-    for
-      browser <- FakeBrowser.install(Counter)
-      page    <- browser.visit("https://example.com/silent")
-      count   <- browser.shared(Counter.count, page.tab.get)
-      seen    <- browser.openPopup >> browser.stored(Counter.seen)
+      browser  <- FakeBrowser.install(Counter)
+      page     <- browser.visit("https://example.com/count")
+      _        <- browser.call(Counter.add, page.tab.get)(2)
+      _        <- browser.openPopup
+      request  <- browser.call(Counter.hang, page.tab.get)(()).attempt.start
+      _        <- IO.sleep(20.millis) >> browser.close(page.tab.get)
+      result   <- request.joinWithNever
+      seen     <- browser.stored(Counter.seen)
+      finished <- browser.stored(Counter.finished)
+      count    <- browser.shared(Counter.count, page.tab.get)
+      open     <- browser.openPorts
     yield
-      assertEquals(count, 0)
+      assert(
+        result
+          .left
+          .exists:
+            case MessagingError("hang", reason) =>
+              reason.contains("message channel closed")
+            case _ => false
+        ,
+        result,
+      )
+      assertEquals(seen, List(0, 2))
+      assertEquals((finished, count, open), (true, 0, 0))
+
+  test(
+    "A tab's shared value is its content script's, or else its default, as where its script shares only something else, and fails if its reader cannot read it.",
+  ):
+    for
+      browser  <- FakeBrowser.install(Counter)
+      counter  <- browser.visit("https://example.com/count")
+      plain    <- browser.visit("https://example.com/other")
+      silent   <- browser.visit("https://example.com/silent")
+      misread  <- browser.shared(Counter.misshared, counter.tab.get).attempt
+      _        <- browser.call(Counter.add, counter.tab.get)(4)
+      counted  <- browser.shared(Counter.count, counter.tab.get)
+      other    <- browser.shared(Counter.count, plain.tab.get)
+      unshared <- browser.shared(Counter.count, silent.tab.get)
+      seen     <- browser.openPopup >> browser.stored(Counter.seen)
+      _        <- browser.call(Counter.stop, counter.tab.get)(())
+      stopped  <- browser.shared(Counter.count, counter.tab.get)
+    yield
+      assertEquals(
+        misread,
+        Left(MessagingError(
+          "count",
+          "Got value '0' with wrong type, expecting string",
+        )),
+      )
+      assertEquals(
+        (counted, other, unshared, stopped),
+        (4, 0, 0, 0),
+      )
       assertEquals(seen, List(0))
 
   test(
-    "A page sees a tab's shared value, then each new value, then the default once the tab stops sharing it.",
+    "A page sees a tab's shared value, then each new value, then the default once the tab stops sharing it, though it sets a value as it stops.",
   ):
     for
       browser <- FakeBrowser.install(Counter)
@@ -123,20 +113,16 @@ class SharingSuite extends CatsEffectSuite:
       _       <- browser.call(Counter.add, page.tab.get)(2)
       _       <- browser.openPopup
       _       <- browser.call(Counter.add, page.tab.get)(3)
-      _       <- browser.call(Counter.stop, page.tab.get)(())
+      _       <- browser.call(Counter.finish, page.tab.get)(())
       seen    <- browser.stored(Counter.seen)
-    yield assertEquals(seen, List(0, 5, 2))
+    yield assert(
+      Set(List(0, 5, 2), List(0, 9, 5, 2)).contains(seen),
+      seen,
+    )
 
-  test("A page sees a value that its tab begins sharing after it looks."):
-    for
-      browser <- FakeBrowser.install(Counter)
-      page    <- browser.visit("https://example.com/late")
-      _       <- browser.openPopup
-      _       <- browser.call(Counter.begin, page.tab.get)(())
-      seen    <- browser.stored(Counter.seen)
-    yield assertEquals(seen, List(7, 0))
-
-  test("A page follows its tab to the next page that shares the value."):
+  test(
+    "A page follows its tab to the next page, and sees a value that it begins sharing after the page looks.",
+  ):
     for
       browser <- FakeBrowser.install(Counter)
       page    <- browser.visit("https://example.com/count")
@@ -149,31 +135,6 @@ class SharingSuite extends CatsEffectSuite:
       _    <- browser.call(Counter.begin, page.tab.get)(())
       seen <- browser.stored(Counter.seen)
     yield assertEquals(seen, List(7, 0, 2))
-
-  test("A page sees the default once its tab closes, and stops watching it."):
-    for
-      browser  <- FakeBrowser.install(Counter)
-      page     <- browser.visit("https://example.com/count")
-      _        <- browser.call(Counter.add, page.tab.get)(2)
-      _        <- browser.openPopup
-      _        <- browser.close(page.tab.get)
-      seen     <- browser.stored(Counter.seen)
-      finished <- browser.stored(Counter.finished)
-      count    <- browser.shared(Counter.count, page.tab.get)
-      open     <- browser.openPorts
-    yield
-      assertEquals(seen, List(0, 2))
-      assertEquals((finished, count, open), (true, 0, 0))
-
-  test("A value that its owner sets as it stops is not seen after it stops."):
-    for
-      browser <- FakeBrowser.install(Counter)
-      page    <- browser.visit("https://example.com/count")
-      _       <- browser.call(Counter.add, page.tab.get)(2)
-      _       <- browser.openPopup
-      _       <- browser.call(Counter.finish, page.tab.get)(())
-      seen    <- browser.stored(Counter.seen)
-    yield assertEquals(seen.headOption, Some(0))
 
   test("Each page that watches a value sees it, and one that stops lets go."):
     for

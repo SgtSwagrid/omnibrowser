@@ -6,22 +6,20 @@ import munit.CatsEffectSuite
 
 class SendersSuite extends CatsEffectSuite:
 
-  test("A content script's request tells the background which tab it is from."):
+  test(
+    "A content script's request tells the background which tab it is from, and one from elsewhere comes from no tab.",
+  ):
     for
       browser <- FakeBrowser.install(Flagger)
       first   <- browser.visit("https://example.com/flag")
       second  <- browser.visit("https://example.org/")
       flagged <- browser.badgeOf(first.tab.get)
       plain   <- browser.badgeOf(second.tab.get)
+      where   <- browser.call(Flagger.where)(())
     yield
       assertEquals(flagged, "!")
       assertEquals(plain, "")
-
-  test("A request from elsewhere than a content script comes from no tab."):
-    FakeBrowser
-      .install(Flagger)
-      .flatMap(_.call(Flagger.where)(()))
-      .assertEquals("nowhere")
+      assertEquals(where, "nowhere")
 
 /** Flags the tab of each page whose path asks for it. */
 object Flagger extends BrowserExtension[Any]:

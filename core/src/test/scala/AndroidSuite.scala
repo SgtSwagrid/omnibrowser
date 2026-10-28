@@ -17,18 +17,16 @@ class AndroidSuite extends FunSuite:
     )
     .browser_specific_settings
 
-  test("By default, Firefox for Android may install the extension."):
+  test(
+    "Firefox for Android may install the extension, from the version asked for, unless it is for desktop Firefox alone.",
+  ):
     val android = settings(Mobile).gecko_android
     assert(!js.isUndefined(android))
     assert(js.isUndefined(android.strict_min_version))
-
-  test("The minimum version of Firefox for Android is given if asked for."):
     assertEquals(
       settings(Recent).gecko_android.strict_min_version.asInstanceOf[String],
       "120.0",
     )
-
-  test("An extension for desktop Firefox alone does not mention Android."):
     assert(js.isUndefined(settings(Desktop).gecko_android))
 
   test("Chromium and Safari are told nothing of Android."):
@@ -48,26 +46,26 @@ class AndroidSuite extends FunSuite:
         Seq.empty,
       )
 
-  test("A permission that Firefox for Android lacks is warned of."):
+  test(
+    "A permission or optional permission that Firefox for Android lacks is warned of.",
+  ):
     val warnings =
       AndroidSupport.warnings(Set("bookmarks", "storage"), Set.empty)
     assertEquals(warnings.size, 1)
     assert(warnings.head.contains("permission bookmarks"))
+    val optional = AndroidSupport.warnings(Set.empty, Set("history", "tabs"))
+    assertEquals(optional.size, 1)
+    assert(optional.head.contains("optional permission history"))
 
-  test("An optional permission that Firefox for Android lacks is warned of."):
-    val warnings = AndroidSupport.warnings(Set.empty, Set("history", "tabs"))
-    assertEquals(warnings.size, 1)
-    assert(warnings.head.contains("optional permission history"))
-
-  test("Nothing is warned of for an extension that Android does not run."):
-    assertEquals(
-      AndroidSupport.warnings(Desktop),
-      Seq.empty,
-    )
-
-  test("Nothing is warned of for the permissions that Android has."):
+  test(
+    "Nothing is warned of for the permissions that Android has, or for an extension that it does not run.",
+  ):
     assertEquals(
       Describe.warnings(Mobile, Build(Target.Firefox, "1", "id")),
+      Seq.empty,
+    )
+    assertEquals(
+      AndroidSupport.warnings(Desktop),
       Seq.empty,
     )
 

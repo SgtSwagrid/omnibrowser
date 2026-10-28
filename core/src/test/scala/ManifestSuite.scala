@@ -28,48 +28,37 @@ class ManifestSuite extends FunSuite:
     .asInstanceOf[js.Array[String]]
     .toList
 
-  test("A release's version is its own."):
-    assertEquals(
-      Manifest.numericVersion("1.2.3"),
-      "1.2.3",
-    )
-    assertEquals(Manifest.numericVersion("0.1"), "0.1")
-
-  test("A development version counts the commits since its release."):
-    assertEquals(
-      Manifest.numericVersion("1.2.3+4-abc-SNAPSHOT"),
-      "1.2.3.4",
-    )
-    assertEquals(
-      Manifest.numericVersion("1.2.3.4+5-abc"),
-      "1.2.3.4",
-    )
-    assertEquals(
-      manifest(Target.Firefox).version.asInstanceOf[String],
-      "1.2.3.4",
-    )
-
-  test("A version is never all zeros, which Chromium refuses."):
-    assertEquals(
-      Manifest.numericVersion("0.0.0+3-abc-SNAPSHOT"),
-      "0.0.0.3",
-    )
-    assertEquals(
-      Manifest.numericVersion("0.0.0"),
-      "0.0.0.1",
-    )
-    assertEquals(
-      Manifest.numericVersion("0.0.0.0"),
-      "0.0.0.1",
-    )
-    assertEquals(
-      Manifest.numericVersion("SNAPSHOT"),
-      "0.1",
+  test(
+    "A release's version is its own, a development version counts the commits since its release, and none is all zeros, which Chromium refuses.",
+  ):
+    Seq(
+      "1.2.3"                -> "1.2.3",
+      "0.1"                  -> "0.1",
+      "1.2.3+4-abc-SNAPSHOT" -> "1.2.3.4",
+      "1.2.3.4+5-abc"        -> "1.2.3.4",
+      "0.0.0+3-abc-SNAPSHOT" -> "0.0.0.3",
+      "0.0.0"                -> "0.0.0.1",
+      "0.0.0.0"              -> "0.0.0.1",
+      "SNAPSHOT"             -> "0.1",
+    ).foreach((version, numeric) =>
+      assertEquals(
+        Manifest.numericVersion(version),
+        numeric,
+        version,
+      ),
     )
 
   test(
-    "Every browser but Firefox shows the build's full version beside the numeric one.",
+    "Every browser is given the numeric version, and every browser but Firefox the build's full version beside it.",
   ):
+    Target
+      .values
+      .foreach(target =>
+        assertEquals(
+          manifest(target).version.asInstanceOf[String],
+          "1.2.3.4",
+        ),
+      )
     Seq(Target.Chromium, Target.Safari).foreach(target =>
       assertEquals(
         manifest(target).version_name.asInstanceOf[String],
@@ -78,14 +67,8 @@ class ManifestSuite extends FunSuite:
     )
     assert(js.isUndefined(manifest(Target.Firefox).version_name))
 
-  test("The manifest requests the extension's permissions."):
-    assertEquals(
-      strings(manifest(Target.Chromium).permissions),
-      List("storage"),
-    )
-
   test(
-    "Chromium and Safari run the background as a service worker that loads the bundle.",
+    "Chromium and Safari run the background as a service worker that loads the bundle, and Firefox as a page that does.",
   ):
     Seq(Target.Chromium, Target.Safari).foreach: target =>
       val background = manifest(target).background
@@ -95,8 +78,6 @@ class ManifestSuite extends FunSuite:
       )
       assert(js.isUndefined(background.scripts))
       assert(files(target)("background.js").contains("importScripts"))
-
-  test("Firefox runs the background as a page that loads the bundle."):
     val background = manifest(Target.Firefox).background
     assertEquals(
       strings(background.scripts),
@@ -104,33 +85,46 @@ class ManifestSuite extends FunSuite:
     )
     assert(!files(Target.Firefox)("background.js").contains("importScripts"))
 
-  test("Only Firefox is told the extension's ID."):
+  test(
+    "Only Firefox is told the extension's ID and what data it collects, which is nothing unless it says otherwise.",
+  ):
+    val gecko = manifest(Target.Firefox).browser_specific_settings.gecko
     assertEquals(
-      manifest(Target.Firefox)
-        .browser_specific_settings
-        .gecko
-        .id
-        .asInstanceOf[String],
+      gecko.id.asInstanceOf[String],
       "sample@example.com",
+    )
+    assertEquals(
+      strings(gecko.data_collection_permissions.required),
+      List("none"),
+    )
+    assert(js.isUndefined(gecko.data_collection_permissions.optional))
+    val collected = js
+      .JSON
+      .parse(
+        Describe.files(
+          Collector,
+          "Collector",
+          Build(Target.Firefox, "1", "id"),
+        )("manifest.json"),
+      )
+      .browser_specific_settings
+      .gecko
+      .data_collection_permissions
+    assertEquals(
+      strings(collected.required),
+      List("browsingActivity", "websiteContent"),
+    )
+    assertEquals(
+      strings(collected.optional),
+      List("technicalAndInteraction"),
     )
     Seq(Target.Chromium, Target.Safari).foreach(target =>
       assert(js.isUndefined(manifest(target).browser_specific_settings)),
     )
 
   test(
-    "Firefox is told that an extension collects nothing, unless it says otherwise.",
+    "The manifest requests the permissions, hosts and optional permissions.",
   ):
-    val permissions = manifest(Target.Firefox)
-      .browser_specific_settings
-      .gecko
-      .data_collection_permissions
-    assertEquals(
-      strings(permissions.required),
-      List("none"),
-    )
-    assert(js.isUndefined(permissions.optional))
-
-  test("The manifest requests the hosts and optional permissions."):
     val manifest = js
       .JSON
       .parse(
@@ -157,29 +151,9 @@ class ManifestSuite extends FunSuite:
       List("https://*/*"),
     )
 
-  test("Firefox is told what data an extension collects."):
-    val permissions = js
-      .JSON
-      .parse(
-        Describe.files(
-          Collector,
-          "Collector",
-          Build(Target.Firefox, "1", "id"),
-        )("manifest.json"),
-      )
-      .browser_specific_settings
-      .gecko
-      .data_collection_permissions
-    assertEquals(
-      strings(permissions.required),
-      List("browsingActivity", "websiteContent"),
-    )
-    assertEquals(
-      strings(permissions.optional),
-      List("technicalAndInteraction"),
-    )
-
-  test("Each content script loads its bootstrap before the bundle."):
+  test(
+    "Each content script loads its bootstrap before the bundle, and its stylesheets with it.",
+  ):
     val scripts = manifest(Target.Chromium)
       .content_scripts
       .asInstanceOf[js.Array[js.Dynamic]]
@@ -192,6 +166,10 @@ class ManifestSuite extends FunSuite:
       ),
     )
     assertEquals(
+      strings(scripts(0).css),
+      List("content.css"),
+    )
+    assertEquals(
       strings(scripts(0).matches),
       List("https://*/*"),
     )
@@ -200,27 +178,17 @@ class ManifestSuite extends FunSuite:
       "document_start",
     )
 
-  test("A content script's stylesheets are injected with it."):
-    val scripts = manifest(Target.Firefox)
-      .content_scripts
-      .asInstanceOf[js.Array[js.Dynamic]]
-    assertEquals(
-      strings(scripts(0).css),
-      List("content.css"),
-    )
-
-  test("A page's body and stylesheets come before its scripts."):
-    val html = files(Target.Chromium)("popup.html")
-    assert(html.contains("""<link rel="stylesheet" href="popup.css">"""))
-    assert(html.indexOf("popup.css") < html.indexOf("</head>"))
-    assert(html.indexOf("""<main id="app">""") < html.indexOf("popup.js"))
-
-  test("The popup is a page that loads its bootstrap before the bundle."):
+  test(
+    "The popup is a page whose body and stylesheets come before its bootstrap, which comes before the bundle.",
+  ):
     assertEquals(
       manifest(Target.Chromium).action.default_popup.asInstanceOf[String],
       "popup.html",
     )
     val html = files(Target.Chromium)("popup.html")
+    assert(html.contains("""<link rel="stylesheet" href="popup.css">"""))
+    assert(html.indexOf("popup.css") < html.indexOf("</head>"))
+    assert(html.indexOf("""<main id="app">""") < html.indexOf("popup.js"))
     assert(html.indexOf("popup.js") < html.indexOf("omnibrowser.js"))
     assert(html.contains("<title>Sample &amp; Co</title>"))
 
