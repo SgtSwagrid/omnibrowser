@@ -24,7 +24,7 @@ class FakeApiSuite extends CatsEffectSuite:
     intercept[IllegalStateException](event.fire())
 
   test(
-    "A port that reaches nothing fails the test unless its listener reads why.",
+    "A port that reaches nothing fails the test unless its listener reads why, or its own side closes it first, and one asked for without a name is named \"\".",
   ):
     for
       (simulation, activity) <- simulated
@@ -33,8 +33,11 @@ class FakeApiSuite extends CatsEffectSuite:
       _   <- IO(connect(page, tab, "unread"))
       _   <-
         IO(connect(page, tab, "read").onDisconnect.addListener(reading(page)))
-      _ <- IO.sleep(20.millis)
+      unnamed <- IO(page.api.tabs.get.connect(tab, js.undefined))
+      _       <- IO(unnamed.disconnect())
+      _       <- IO.sleep(20.millis)
     yield
+      assertEquals(unnamed.name, "")
       assertEquals(
         activity.status.failures,
         Vector(UncheckedError(Simulation.unreachable)),
@@ -42,40 +45,8 @@ class FakeApiSuite extends CatsEffectSuite:
       assertEquals(simulation.openPorts, 0)
 
   test(
-    "A port that its own side closes before it reaches nothing is not reported.",
+    "A listener's failure, at once or in a later event, is the extension's, and the others still hear.",
   ):
-    for
-      (simulation, activity) <- simulated
-      page = simulation.context(Kind.Page)
-      tab <- IO(simulation.openTab("https://example.com/", "")._1.id)
-      _   <- IO(connect(page, tab, "closed").disconnect())
-      _   <- IO.sleep(20.millis)
-    yield
-      assertEquals(activity.status.failures, Vector.empty)
-      assertEquals(simulation.openPorts, 0)
-
-  test("A port asked for without a name is named \"\"."):
-    simulated.map: (simulation, _) =>
-      val page = simulation.context(Kind.Page)
-      assertEquals(
-        page.api.tabs.get.connect(1, js.undefined).name,
-        "",
-      )
-
-  test("A message that reaches no listener is rejected."):
-    for
-      (simulation, _) <- simulated
-      _               <- IO(simulation.install())
-      tester = simulation.context(Kind.Test)
-      result <- IO
-        .fromPromise(IO(tester.api.runtime.sendMessage("Anyone?")))
-        .attempt
-    yield assertEquals(
-      reason(result),
-      Some(Simulation.unreachable),
-    )
-
-  test("A listener's failure is the extension's, and the others still hear."):
     for
       (simulation, activity) <- simulated
       heard = mutable.Buffer.empty[String]
@@ -90,24 +61,31 @@ class FakeApiSuite extends CatsEffectSuite:
           .onChanged
           .addListener((() => heard += "other"): js.Function0[Unit]),
       )
-      _ <- IO(simulation.write("local", js.Dictionary("key" -> 1)))
-    yield
-      assertEquals(heard.toList, List("other"))
-      assertEquals(activity.status.failures.size, 1)
-
-  test("A listener's failure in a later event is the extension's."):
-    for
-      (simulation, activity) <- simulated
-      _                      <- IO(
+      _      <- IO(simulation.write("local", js.Dictionary("key" -> 1)))
+      atOnce <- IO(activity.status.failures.size)
+      _      <- IO(
         simulation.later(throw IllegalStateException("Deliberately failed.")),
       )
       _ <- IO.sleep(20.millis)
-    yield assertEquals(activity.status.failures.size, 1)
+    yield
+      assertEquals(heard.toList, List("other"))
+      assertEquals(atOnce, 1, "the failure at once")
+      assertEquals(
+        activity.status.failures.size - atOnce,
+        1,
+        "the failure in a later event",
+      )
 
-  test("A page that has gone can neither send nor store anything."):
+  test(
+    "A message that reaches no listener is rejected, and a page that has gone can neither send nor store anything.",
+  ):
     for
       (simulation, _) <- simulated
       _               <- IO(simulation.install())
+      tester = simulation.context(Kind.Test)
+      unheard <- IO
+        .fromPromise(IO(tester.api.runtime.sendMessage("Anyone?")))
+        .attempt
       tab <- IO(simulation.openTab("https://example.com/", "")._1.id)
       content = simulation.context(Kind.Content(tab))
       _    <- IO(simulation.close(tab))
@@ -120,6 +98,10 @@ class FakeApiSuite extends CatsEffectSuite:
         ))
         .attempt
     yield
+      assertEquals(
+        reason(unheard),
+        Some(Simulation.unreachable),
+      )
       assertEquals(
         reason(sent),
         Some(Simulation.invalidated),

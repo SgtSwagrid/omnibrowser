@@ -5,19 +5,17 @@ import munit.FunSuite
 
 class PermissionsSuite extends FunSuite:
 
-  test("A permission is named after its type."):
+  test(
+    "A permission is named after its type, an intersection names each of its permissions, and `Any` names none.",
+  ):
     assertEquals(
       summon[Permissions[ActiveTab]].names,
       Set("activeTab"),
     )
-
-  test("An intersection of permissions names each of them."):
     assertEquals(
       summon[Permissions[Storage & Tabs & ActiveTab]].names,
       Set("storage", "tabs", "activeTab"),
     )
-
-  test("`Any` names no permissions."):
     assertEquals(
       summon[Permissions[Any]].names,
       Set.empty,
@@ -28,15 +26,15 @@ class PermissionsSuite extends FunSuite:
       "String is not a permission.",
     ))
 
-  test("An extension's permissions grant the APIs that they cover."):
+  test(
+    "An extension's permissions grant the APIs that they cover, and only those.",
+  ):
     assertNoDiff(
       compileErrors(
         "{ import Granting.given; (browser: Browser) => browser.storage }",
       ),
       "",
     )
-
-  test("An extension without a permission cannot use the APIs it covers."):
     val errors = compileErrors(
       "{ import Withholding.given; (browser: Browser) => browser.storage }",
     )

@@ -1,6 +1,5 @@
 package com.alecdorrington.omnibrowser.example
 
-import cats.effect.IO
 import com.alecdorrington.omnibrowser.Target
 import com.alecdorrington.omnibrowser.testkit.FakeBrowser
 import munit.CatsEffectSuite
@@ -21,9 +20,8 @@ class WordCountBehaviourSuite extends CatsEffectSuite:
       )
 
   installs.foreach: (name, install) =>
-
     test(
-      s"Each page's words are added to the total, which the badge and popup show, $name.",
+      s"Each secure page's words are added to the total, which the badge and popup show beside the active tab's own, until the popup's button resets it, $name.",
     ):
       for
         browser <- install
@@ -31,65 +29,40 @@ class WordCountBehaviourSuite extends CatsEffectSuite:
           "https://example.com/",
           "The quick brown fox",
         )
-        _ <- browser.visit(
-          "https://example.org/",
+        _        <- browser.visit("http://example.org/", "Not counted")
+        insecure <- browser.openPopup.flatMap(_.text(".page"))
+        _        <- browser.visit(
+          "https://example.net/",
           "jumps over\n the lazy dog",
         )
-        total <- browser.stored(WordCount.total)
-        badge <- browser.badge
-        popup <- browser.openPopup
-        text  <- popup.text("p")
+        total   <- browser.stored(WordCount.total)
+        badge   <- browser.badge
+        popup   <- browser.openPopup
+        text    <- popup.text("p")
+        page    <- popup.text(".page")
+        _       <- popup.click("button")
+        reset   <- browser.stored(WordCount.total)
+        cleared <- browser.badge
+        after   <- popup.text("p")
       yield
-        assertEquals(total, 9)
-        assertEquals(badge, "9")
-        assertEquals(text, "9 words counted.")
-
-    test(s"The popup shows how many words the active tab's page has, $name."):
-      for
-        browser <- install
-        _       <- browser.visit(
-          "https://example.com/",
-          "One two three",
+        assertEquals(
+          (total, badge, text),
+          (9, "9", "9 words counted."),
         )
-        _      <- browser.visit("http://example.org/", "Not counted")
-        first  <- browser.openPopup.flatMap(_.text(".page"))
-        _      <- browser.visit("https://example.net/", "Four five")
-        second <- browser.openPopup.flatMap(_.text(".page"))
-      yield
-        assertEquals(first, "0 on this page.")
-        assertEquals(second, "2 on this page.")
-
-    test(s"The popup's button resets the count, $name."):
-      for
-        browser <- install
-        _       <- browser.visit(
-          "https://example.com/",
-          "Three short words",
+        assertEquals(
+          (insecure, page),
+          ("0 on this page.", "5 on this page."),
         )
-        popup <- browser.openPopup
-        _     <- popup.click("button")
-        total <- browser.stored(WordCount.total)
-        badge <- browser.badge
-        text  <- popup.text("p")
-      yield
-        assertEquals(total, 0)
-        assertEquals(badge, "")
-        assertEquals(text, "0 words counted.")
+        assertEquals(
+          (reset, cleared, after),
+          (0, "", "0 words counted."),
+        )
 
-    test(s"Pages that are not served over HTTPS are not counted, $name."):
-      install
-        .flatTap(_.visit("http://example.com/", "Not counted"))
-        .flatMap(_.stored(WordCount.total))
-        .assertEquals(0)
-
-  test("Words in any script are counted, but not punctuation."):
-    FakeBrowser
-      .install(WordCount)
-      .flatMap(_.call(WordCount.count)("héllo, привет — 世界 42!"))
-      .assertEquals(4)
-
-  test("The background counts the words in whatever text it is sent."):
-    FakeBrowser
-      .install(WordCount)
-      .flatMap(_.call(WordCount.count)("one two  three"))
-      .assertEquals(3)
+  test(
+    "The background counts the words in whatever text it is sent, in any script, but not punctuation.",
+  ):
+    for
+      browser <- FakeBrowser.install(WordCount)
+      plain   <- browser.call(WordCount.count)("one two  three")
+      mixed   <- browser.call(WordCount.count)("héllo, привет — 世界 42!")
+    yield assertEquals((plain, mixed), (3, 4))

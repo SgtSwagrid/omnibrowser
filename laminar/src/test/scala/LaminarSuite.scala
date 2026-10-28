@@ -14,37 +14,30 @@ import munit.CatsEffectSuite
 
 class LaminarSuite extends CatsEffectSuite:
 
-  test("A page shows a stored value, then each new value that it is given."):
+  test(
+    "A page shows a stored value and each new one, which an updater transforms with each event, whatever it is, beside what an event stream's program gives.",
+  ):
     for
       browser <- FakeBrowser.install(Tally)
       popup   <- browser.openPopup
       before  <- popup.text(".clicks")
+      doubled <- popup.text(".doubled")
       _       <- browser.store(Tally.clicks, 5)
-      after   <- popup.text(".clicks")
-    yield
-      assertEquals(before, "0 clicks")
-      assertEquals(after, "5 clicks")
-
-  test("An updater transforms a stored value with each event, whatever it is."):
-    for
-      browser <- FakeBrowser.install(Tally)
-      popup   <- browser.openPopup
+      stored  <- popup.text(".clicks")
       _       <- popup.click(".add")
       _       <- popup.click(".add")
       clicks  <- browser.stored(Tally.clicks)
-      text    <- popup.text(".clicks")
+      after   <- popup.text(".clicks")
     yield
-      assertEquals(clicks, 2)
-      assertEquals(text, "2 clicks")
+      assertEquals(
+        (before, doubled, stored),
+        ("0 clicks", "42", "5 clicks"),
+      )
+      assertEquals((clicks, after), (7, "7 clicks"))
 
-  test("An event stream gives the result of its program."):
-    FakeBrowser
-      .install(Tally)
-      .flatMap(_.openPopup)
-      .flatMap(_.text(".doubled"))
-      .assertEquals("42")
-
-  test("A writer stores what the user enters, which the page shows."):
+  test(
+    "A writer stores what the user enters, which the page shows, and an updater transforms a stored value by what each event carries.",
+  ):
     for
       browser <- FakeBrowser.install(Tally)
       options <- browser.openOptions
@@ -56,6 +49,9 @@ class LaminarSuite extends CatsEffectSuite:
       note    <- browser.stored(Tally.note)
       _       <- browser.store(Tally.note, "Forget the milk.")
       synced  <- options.value(".note")
+      _       <- options.enter(".tag", "dairy")
+      _       <- options.enter(".tag", "urgent")
+      tags    <- browser.stored(Tally.tags)
     yield
       assertEquals(
         (before, after, enabled),
@@ -63,15 +59,7 @@ class LaminarSuite extends CatsEffectSuite:
       )
       assertEquals(note, "Remember the milk.")
       assertEquals(synced, "Forget the milk.")
-
-  test("An updater transforms a stored value by what each event carries."):
-    for
-      browser <- FakeBrowser.install(Tally)
-      options <- browser.openOptions
-      _       <- options.enter(".tag", "dairy")
-      _       <- options.enter(".tag", "urgent")
-      tags    <- browser.stored(Tally.tags)
-    yield assertEquals(tags, List("urgent", "dairy"))
+      assertEquals(tags, List("urgent", "dairy"))
 
   test("A content script adds its element to the end of its page."):
     for
@@ -84,16 +72,9 @@ class LaminarSuite extends CatsEffectSuite:
       assertEquals(tally, "3")
       assertEquals(text, "Hello. 3")
 
-  test("An event stream runs its program each time that it starts."):
-    for
-      browser <- FakeBrowser.install(Copier)
-      popup   <- browser.openPopup
-      _       <- popup.click(".toggle")
-      _       <- popup.click(".toggle")
-      starts  <- browser.stored(Copier.starts)
-    yield assertEquals(starts, 2)
-
-  test("An event stream runs its stream only while it is observed."):
+  test(
+    "An event stream runs its program each time that it starts, and its stream only while it is observed.",
+  ):
     for
       browser <- FakeBrowser.install(Copier)
       popup   <- browser.openPopup
@@ -104,47 +85,30 @@ class LaminarSuite extends CatsEffectSuite:
       _       <- popup.click(".toggle")
       _       <- browser.store(Copier.original, 3)
       shown   <- browser.stored(Copier.copy)
+      starts  <- browser.stored(Copier.starts)
     yield
-      assertEquals(hidden, 1)
-      assertEquals(shown, 3)
+      assertEquals((hidden, shown), (1, 3))
+      assertEquals(starts, 2)
 
   test(
-    "A page shows a tab's shared value, then each new value that it is given.",
+    "A page shows a tab's shared value and each new one, or the default where nothing there shares it, as once it stops.",
   ):
     for
-      browser <- FakeBrowser.install(Presser)
-      page    <- browser.visit("https://example.com/")
-      _       <- browser.call(Presser.press, page.tab.get)(())
-      popup   <- browser.openPopup
-      before  <- popup.text(".presses")
-      _       <- browser.call(Presser.press, page.tab.get)(())
-      after   <- popup.text(".presses")
-    yield
-      assertEquals(before, "1 presses")
-      assertEquals(after, "2 presses")
-
-  test("A page shows a tab's default value where nothing there shares it."):
-    for
-      browser <- FakeBrowser.install(Presser)
-      _       <- browser.visit("http://example.com/")
-      popup   <- browser.openPopup
-      presses <- popup.text(".presses")
-    yield assertEquals(presses, "0 presses")
-
-  test(
-    "A page shows a tab's default value again once nothing there shares it.",
-  ):
-    for
-      browser <- FakeBrowser.install(Presser)
-      page    <- browser.visit("https://example.com/")
-      _       <- browser.call(Presser.press, page.tab.get)(())
-      popup   <- browser.openPopup
-      before  <- popup.text(".presses")
-      _       <- browser.call(Presser.release, page.tab.get)(())
-      after   <- popup.text(".presses")
-    yield
-      assertEquals(before, "1 presses")
-      assertEquals(after, "0 presses")
+      browser  <- FakeBrowser.install(Presser)
+      _        <- browser.visit("http://example.com/")
+      unshared <- browser.openPopup.flatMap(_.text(".presses"))
+      page     <- browser.visit("https://example.com/")
+      _        <- browser.call(Presser.press, page.tab.get)(())
+      popup    <- browser.openPopup
+      first    <- popup.text(".presses")
+      _        <- browser.call(Presser.press, page.tab.get)(())
+      second   <- popup.text(".presses")
+      _        <- browser.call(Presser.release, page.tab.get)(())
+      released <- popup.text(".presses")
+    yield assertEquals(
+      (unshared, first, second, released),
+      ("0 presses", "1 presses", "2 presses", "0 presses"),
+    )
 
   test("A content script cannot watch a tab's shared value."):
     assert(
