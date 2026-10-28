@@ -11,11 +11,17 @@
   
 </div>
 
+> [!WARNING]
+> Omnibrowser is still a prototype. Anything could be broken or change between minor versions.
+
 ## ⬇️ Installation
+
+The following applies for [Scala 3](https://www.scala-lang.org/) projects built with [sbt 2](https://www.scala-sbt.org/).
+Add the plugin to your `project/plugins.sbt` file, with the desired version number (e.g. [latest](../../releases/latest)), and enable it in your `build.sbt` file:
 
 ```scala
 // project/plugins.sbt
-addSbtPlugin("com.alecdorrington" % "sbt-omnibrowser" % "0.6.0")
+addSbtPlugin("com.alecdorrington" % "sbt-omnibrowser" % "{version}")
 
 // build.sbt
 lazy val extension = project.enablePlugins(OmnibrowserPlugin)
