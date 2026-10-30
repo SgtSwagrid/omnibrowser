@@ -7,7 +7,7 @@
 The [plugin](../sbt-omnibrowser) adds it to an extension's project. To use it without the plugin:
 
 ```scala
-libraryDependencies += "com.alecdorrington" %% "omnibrowser-core" % "0.6.0"
+libraryDependencies += "com.alecdorrington" %% "omnibrowser-core" % "{version}"
 ```
 
 ## 🧱 Parts
