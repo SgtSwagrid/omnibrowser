@@ -77,6 +77,39 @@ object Assembly:
   /** The name of the bundle that the content scripts load, of their code alone. */
   val contentBundle = "omnibrowser-content.js"
 
+  /**
+    * The size from which Firefox Add-ons rejects a file that it parses: 5 MiB,
+    * as its linter has it.
+    */
+  private val firefoxLimit = 5L * 1024 * 1024
+
+  /**
+    * The extensions of the files that Firefox Add-ons parses, as its linter
+    * does.
+    */
+  private val parsed = Set("html", "htm", "js", "mjs", "json")
+
+  /**
+    * Fails if the store of `target` would reject the extension laid out in
+    * `directory`, as Firefox Add-ons does one with a file too large to parse.
+    */
+  def check(target: Target, directory: File): Unit =
+    val large = if target == Target.Firefox then tooLarge(directory) else Seq()
+    if large.nonEmpty then
+      throw MessageOnlyException(
+        "Firefox Add-ons rejects files of 5 MiB or more, as too large to parse: " +
+          large.mkString(", ") + ".",
+      )
+
+  /** The files laid out in `directory` that Firefox Add-ons would not parse. */
+  private def tooLarge(directory: File): Seq[String] = Path
+    .allSubpaths(directory)
+    .toSeq
+    .collect:
+      case (file, path) if parsed(file.ext) && file.length >= firefoxLimit =>
+        f"$path (${ file.length / 1048576.0 }%.1f MiB)"
+    .sorted
+
   /** Deletes the zips in `directory`, such as those of earlier versions. */
   def clearZips(directory: File): Unit = IO.delete((directory * "*.zip").get())
 
