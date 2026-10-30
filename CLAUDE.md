@@ -68,6 +68,7 @@ This is a Scala library for writing browser extensions against a typed model of 
 - A `Message[Req, Res]` is a kind of message (a name and codecs), which used to be called `Endpoint`, as the browser's messages never leave it. A raw `js.Any` that the browser carries stays `message` at the WebExtensions layer (facades, `FakeApi`), but is `json` in `webext.Messages`, where both meet.
 - `unidoc` cannot resolve `js.JSON.stringify` (an overloaded Scala.js method with defaults), though each project's own Scaladoc can, so the release's docs fail on it. Use `launch.Json.stringify` instead.
 - In a non-native JS class (`extends js.Object`), a Scala-side check like `x.isInstanceOf[FakeDocument]` on a `js.Dynamic` warns that it is always false; widen `x` to `Any` first.
+- A built extension can be checked in Firefox (installed here) headless, over WebDriver BiDi: start it with `--remote-debugging-port` and a fresh `--profile`, connect to `ws://127.0.0.1:<port>/session`, `session.new`, then `webExtension.install` with `{type: "path"}`. BiDi refuses to navigate a tab to `moz-extension://` pages, so reach the extension from a content script on a local page (one that writes to the page's DOM), which can read storage and message the background. A `user.js` setting `extensions.webextensions.uuids` fixes the extension's UUID.
 
 ## Instructions
 
