@@ -20,7 +20,7 @@ The [testkit](../testkit) and [`omnibrowser-laminar`](../laminar) are the projec
 | Task | Builds the extension | Into |
 | --- | --- | --- |
 | `omnibrowserBuild` | For development, unpacked for each browser, ready to load | `target/**/omnibrowser/development/<browser>/` |
-| `omnibrowserPackage` | For release, zipped for each browser's store, with no source map, so that it builds the same wherever it is built | `target/**/omnibrowser/release/` |
+| `omnibrowserPackage` | For release, minified, zipped for each browser's store, with no source map, so that it builds the same wherever it is built; it fails if Firefox Add-ons would reject a file as too large (5 MiB) | `target/**/omnibrowser/release/` |
 
 | Setting | Default | Is |
 | --- | --- | --- |
@@ -41,6 +41,7 @@ Each zip is named `<name>-<version>-<target>.zip`, as `word-count-1.0.0-chromium
 ## ⚙️ How it works
 
 It links the extension's code twice: a bundle for the background and pages, and one for the content scripts, holding only what they reach.
+For release, it minifies both with [esbuild](https://esbuild.github.io), at a fixed version that `npx` fetches from npm, as Scala.js advises: its own minifier shortens only the names of properties.
 It then runs the first under Node, which gives the extension's manifest, a small bootstrap for each part, and its pages, and writes them out for each browser.
 It builds the extension before each test run, so that the tests may run it as built.
 As sbt runs it, it is compiled with sbt's own Scala version.

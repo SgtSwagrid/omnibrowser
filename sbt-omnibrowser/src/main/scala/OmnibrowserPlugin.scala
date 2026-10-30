@@ -119,8 +119,11 @@ object OmnibrowserPlugin extends AutoPlugin:
       (_.withESFeatures(_.withESVersion(esVersion))),
     Compile / fastLinkJS / contentLinker := CacheBox(),
     Compile / fullLinkJS / contentLinker := CacheBox(),
-    omnibrowserBuild   := assemble(fastLinkJS, "development").value,
-    omnibrowserPackage := zip(assemble(fullLinkJS, "release")).value,
+    omnibrowserBuild   := assemble(linked(fastLinkJS), "development").value,
+    omnibrowserPackage := zip(assemble(
+      minified(linked(fullLinkJS)),
+      "release",
+    )).value,
 
     // The tests may check the extension as it is built, so every way of
     // running them builds it first.
@@ -145,16 +148,41 @@ object OmnibrowserPlugin extends AutoPlugin:
   private def layouts(mode: String): Def.Initialize[File] =
     Def.setting(target.value / "omnibrowser" / mode)
 
-  /** Lays out the extension for each target, from the bundle that `link` links. */
+  /**
+    * The directories of the bundles that `link` links: the main one's, and the
+    * content scripts'.
+    */
+  private def linked
+    (link: TaskKey[Attributed[Report]])
+    : Def.Initialize[Task[Seq[File]]] = Def.task {
+    (Compile / link).value
+    val main = (Compile / link / scalaJSLinkerOutputDirectory).value
+    Seq(main, linkContent(link).value)
+  }
+
+  /**
+    * The directories of `bundles`, copied with their bundles minified, as a
+    * release's are: Scala.js shortens only the names of properties, and a large
+    * extension's bundle would otherwise be too large for Firefox Add-ons.
+    */
+  private def minified
+    (bundles: Def.Initialize[Task[Seq[File]]])
+    : Def.Initialize[Task[Seq[File]]] = Def.task {
+    Minifier.minify(
+      bundles.value,
+      esVersion,
+      streams.value.log,
+    )
+  }
+
+  /** Lays out the extension for each target, from the bundles in `bundles`. */
   private def assemble
     (
-      link: TaskKey[Attributed[Report]],
+      bundles: Def.Initialize[Task[Seq[File]]],
       mode: String,
     )
     : Def.Initialize[Task[Seq[File]]] = Def.task {
-    (Compile / link).value
-    val linked    = (Compile / link / scalaJSLinkerOutputDirectory).value
-    val content   = linkContent(link).value
+    val bundled   = bundles.value
     val extension = extensionName.value
     val directory = layouts(mode).value
     val runner    = Runner.write(streams.value.cacheDirectory)
@@ -167,7 +195,7 @@ object OmnibrowserPlugin extends AutoPlugin:
       .map(browser =>
         Assembly(extension, browser, build, geckoId).into(
           directory / browser.id,
-          Seq(linked, content),
+          bundled,
           assets,
           runner,
           log,
@@ -213,13 +241,20 @@ object OmnibrowserPlugin extends AutoPlugin:
     }
     .tag(ScalaJSTags.Link)
 
-  /** Zips each layout of the extension that `layouts` makes, for release. */
+  /**
+    * Zips each layout of the extension that `layouts` makes, for release, once
+    * each target's store would take it.
+    */
   private def zip
     (layouts: Def.Initialize[Task[Seq[File]]])
     : Def.Initialize[Task[Seq[File]]] = Def.task {
     val prefix = s"${ normalizedName.value }-${ version.value }"
     val built  = layouts.value
     built.map(_.getParentFile).distinct.foreach(Assembly.clearZips)
+    omnibrowserTargets
+      .value
+      .zip(built)
+      .foreach((browser, layout) => Assembly.check(browser, layout))
     built.map(directory =>
       Assembly.zip(
         directory,
