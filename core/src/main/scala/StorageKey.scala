@@ -56,7 +56,10 @@ object StorageKey:
   * name of its own, as many as the extension needs, as one for each word that a
   * user rates, each `default` until it is first set. Each is a key of its own,
   * so that two parts of the extension setting two of them at once lose neither,
-  * and [[Browser.Storage.all]] reads every one that is stored.
+  * and [[Browser.Storage.all]] reads every one that is stored. No family's
+  * prefix should begin another's in the same area, as `count:` begins
+  * `count:x:`, or the shorter would read the longer's keys as its own, as it
+  * would a key named apart that begins with its prefix.
   */
 final class StorageKeys[A : {Encoder, Decoder}]
   (
