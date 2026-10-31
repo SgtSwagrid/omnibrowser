@@ -4,8 +4,10 @@ import cats.effect.IO
 import cats.syntax.all.*
 import com.alecdorrington.omnibrowser.*
 import com.alecdorrington.omnibrowser.Permission.{Storage, Tabs}
+import java.util.concurrent.TimeoutException
 import munit.CatsEffectSuite
 import org.scalajs.dom.document
+import scala.concurrent.duration.*
 
 class FakeBrowserSuite extends CatsEffectSuite:
 
@@ -67,6 +69,21 @@ class FakeBrowserSuite extends CatsEffectSuite:
         ("first", "synced, elsewhere", "", "again"),
       )
 
+  test(
+    "A request that the background has not answered can be given up at once.",
+  ):
+    for
+      browser <- FakeBrowser.install(Probe)
+      result  <- browser
+        .call(Probe.ignore)(())
+        .timeout(10.millis)
+        .attempt
+        .timeoutAndForget(1.second)
+    yield assert(
+      result.left.exists(_.isInstanceOf[TimeoutException]),
+      s"The request was not given up, but gave $result.",
+    )
+
   test("An extension without the page asked for cannot open it."):
     FakeBrowser
       .install(Probe)
@@ -104,6 +121,9 @@ object Probe extends BrowserExtension[Storage]:
   /** Always fails. */
   val fail = Message[Unit, Unit]("fail")
 
+  /** Never answered. */
+  val ignore = Message[Unit, Unit]("ignore")
+
   /** How many times the extension has been installed. */
   val installs = StorageKey.local[Int]("installs", 0)
 
@@ -122,6 +142,7 @@ object Probe extends BrowserExtension[Storage]:
     serve(fail)((_, _) =>
       IO.raiseError(RuntimeException("Deliberately failed.")),
     ),
+    serve(ignore)((_, _) => IO.never),
   )
 
   override def contentScripts() = Seq(
