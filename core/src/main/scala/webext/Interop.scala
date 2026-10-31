@@ -13,9 +13,15 @@ private[omnibrowser] object Interop:
     * once, as a program that runs at once until its first asynchronous step
     * only waits for it afterwards, so that its failure is not reported as
     * unhandled meanwhile. The program still fails with it.
+    *
+    * Cancelled, the program ends at once, abandoning the promise, as nothing
+    * can stop what it stands for (a message already sent, a write begun), and
+    * waiting for it would hold up whatever cancelled the program, as a
+    * `switchMap` holds up the next stream until the last has ended.
+    * `IO.fromPromise` cannot be cancelled, so it would wait.
     */
   def promise[A](start: => js.Promise[A]): IO[A] =
-    IO.fromPromise(IO(handled(start)))
+    IO.fromPromiseCancelable(IO((handled(start), IO.unit)))
 
   /** `promise`, once it is handled, as by a listener that ignores failure. */
   private def handled[A](promise: js.Promise[A]): js.Promise[A] =
