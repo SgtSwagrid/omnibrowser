@@ -118,7 +118,7 @@ private[testkit] final class FakeStorageArea
   )
   extends js.Object:
 
-  def get(keys: js.Array[String]): js.Promise[js.Dictionary[js.Any]] =
+  def get(keys: js.Array[String] | Null): js.Promise[js.Dictionary[js.Any]] =
     simulation.access(context, area)(simulation.read(area, keys))
 
   def set(items: js.Dictionary[js.Any]): js.Promise[Unit] =

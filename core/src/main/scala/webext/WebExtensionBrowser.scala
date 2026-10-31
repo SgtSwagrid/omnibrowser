@@ -105,14 +105,27 @@ private[omnibrowser] final class WebExtensionStorage
   extends Browser.Storage:
 
   override def get[A](key: StorageKey[A]): IO[A] = promise(
-    area(key).get(js.Array(key.name)),
+    area(key.area).get(js.Array(key.name)),
   ).flatMap(items => WebExtensionStorage.read(key, items.get(key.name)))
 
-  override def set[A](key: StorageKey[A], value: A): IO[Unit] =
-    promise(area(key).set(js.Dictionary(key.name -> key.codec.encodeJs(value))))
+  override def set[A](key: StorageKey[A], value: A): IO[Unit] = promise(
+    area(key.area).set(js.Dictionary(key.name -> key.codec.encodeJs(value))),
+  )
 
   override def remove[A](key: StorageKey[A]): IO[Unit] =
-    promise(area(key).remove(js.Array(key.name)))
+    promise(area(key.area).remove(js.Array(key.name)))
+
+  override def all[A](keys: StorageKeys[A]): IO[Map[String, A]] = promise(
+    area(keys.area).get(null),
+  ).flatMap(items =>
+    items
+      .toList
+      .flatMap((key, json) => keys.nameOf(key).map(_ -> json))
+      .traverse((name, json) =>
+        WebExtensionStorage.read(keys(name), Some(json)).tupleLeft(name),
+      )
+      .map(_.toMap),
+  )
 
   override def changes[A](key: StorageKey[A]): Stream[IO, A] =
     events[Option[js.Any], StorageListener](api.onChanged)(changed(key, _))
@@ -131,7 +144,7 @@ private[omnibrowser] final class WebExtensionStorage
     if area == key.area.id then
       changes.get(key.name).foreach(change => emit(change.newValue.toOption))
 
-  private def area(key: StorageKey[?]): StorageAreaApi = key.area match
+  private def area(area: StorageArea): StorageAreaApi = area match
     case StorageArea.Local   => api.local
     case StorageArea.Sync    => api.sync
     case StorageArea.Session => api.session

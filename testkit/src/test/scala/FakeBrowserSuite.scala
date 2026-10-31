@@ -70,6 +70,26 @@ class FakeBrowserSuite extends CatsEffectSuite:
       )
 
   test(
+    "Each key of a family is a key of its own, and every one stored is read by its name after the prefix, as its default if it cannot be decoded, but none of another family or area.",
+  ):
+    for
+      browser <- FakeBrowser.install(Probe)
+      _       <- List("cat", "dog", "cat", "a:b").traverse_(word =>
+        browser.call(Probe.count)(word),
+      )
+      _ <- browser.store(
+        StorageKey.local[String]("count:bird", ""),
+        "many",
+      )
+      _       <- browser.store(StorageKey.local[Int]("counted", 0), 7)
+      _       <- browser.store(StorageKey.sync[Int]("count:cow", 0), 3)
+      counted <- browser.call(Probe.counted)(())
+    yield assertEquals(
+      counted,
+      Map("cat" -> 2, "dog" -> 1, "a:b" -> 1, "bird" -> 0),
+    )
+
+  test(
     "A request that the background has not answered can be given up at once.",
   ):
     for
@@ -136,6 +156,15 @@ object Probe extends BrowserExtension[Storage]:
   /** A value that content scripts may not see. */
   val secret = StorageKey.session[String]("secret", "")
 
+  /** How many times each word has been counted, under a key of its own. */
+  val counts = StorageKeys.local[Int]("count:", 0)
+
+  /** Counts its word once more. */
+  val count = Message[String, Unit]("count")
+
+  /** How many times each word stored has been counted. */
+  val counted = Message[Unit, Map[String, Int]]("counted")
+
   override def background() = Background(
     onInstalled((_, browser) => browser.storage.update(installs)(_ + 1).void),
     serve(echo)((text, _) => IO.pure(text.reverse)),
@@ -143,6 +172,10 @@ object Probe extends BrowserExtension[Storage]:
       IO.raiseError(RuntimeException("Deliberately failed.")),
     ),
     serve(ignore)((_, _) => IO.never),
+    serve(count)((word, browser) =>
+      browser.storage.update(counts(word))(_ + 1).void,
+    ),
+    serve(counted)((_, browser) => browser.storage.all(counts)),
   )
 
   override def contentScripts() = Seq(

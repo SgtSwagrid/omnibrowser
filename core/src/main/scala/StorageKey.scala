@@ -50,3 +50,44 @@ object StorageKey:
   /** A value kept in memory until the browser closes. */
   def session[A : {Encoder, Decoder}](name: String, default: A): StorageKey[A] =
     StorageKey(StorageArea.Session, name, default)
+
+/**
+  * A family of [[StorageKey]]s in `area`, each named `prefix` followed by a
+  * name of its own, as many as the extension needs, as one for each word that a
+  * user rates, each `default` until it is first set. Each is a key of its own,
+  * so that two parts of the extension setting two of them at once lose neither,
+  * and [[Browser.Storage.all]] reads every one that is stored. No family's
+  * prefix should begin another's in the same area, as `count:` begins
+  * `count:x:`, or the shorter would read the longer's keys as its own, as it
+  * would a key named apart that begins with its prefix.
+  */
+final class StorageKeys[A : {Encoder, Decoder}]
+  (
+    val area: StorageArea,
+    val prefix: String,
+    val default: A,
+  ):
+
+  /** The key of the family named `name`, after its prefix. */
+  def apply(name: String): StorageKey[A] =
+    StorageKey(area, prefix + name, default)
+
+  /** The name of `key` after the family's prefix, if it is of the family. */
+  def nameOf(key: String): Option[String] =
+    Option.when(key.startsWith(prefix))(key.drop(prefix.length))
+
+object StorageKeys:
+
+  /** A family of values kept on this device. */
+  def local[A : {Encoder, Decoder}]
+    (prefix: String, default: A)
+    : StorageKeys[A] = StorageKeys(StorageArea.Local, prefix, default)
+
+  /** A family of values kept on every device to which the user signs in. */
+  def sync[A : {Encoder, Decoder}](prefix: String, default: A): StorageKeys[A] =
+    StorageKeys(StorageArea.Sync, prefix, default)
+
+  /** A family of values kept in memory until the browser closes. */
+  def session[A : {Encoder, Decoder}]
+    (prefix: String, default: A)
+    : StorageKeys[A] = StorageKeys(StorageArea.Session, prefix, default)
