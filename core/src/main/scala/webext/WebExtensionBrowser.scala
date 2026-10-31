@@ -115,16 +115,17 @@ private[omnibrowser] final class WebExtensionStorage
   override def remove[A](key: StorageKey[A]): IO[Unit] =
     promise(area(key.area).remove(js.Array(key.name)))
 
-  override def all[A](keys: StorageKeys[A]): IO[Map[String, A]] =
-    promise(area(keys.area).get(null)).flatMap(items =>
-      items
-        .toList
-        .flatMap((key, json) => keys.nameOf(key).map(_ -> json))
-        .traverse((name, json) =>
-          WebExtensionStorage.read(keys(name), Some(json)).tupleLeft(name),
-        )
-        .map(_.toMap),
-    )
+  override def all[A](keys: StorageKeys[A]): IO[Map[String, A]] = promise(
+    area(keys.area).get(null),
+  ).flatMap(items =>
+    items
+      .toList
+      .flatMap((key, json) => keys.nameOf(key).map(_ -> json))
+      .traverse((name, json) =>
+        WebExtensionStorage.read(keys(name), Some(json)).tupleLeft(name),
+      )
+      .map(_.toMap),
+  )
 
   override def changes[A](key: StorageKey[A]): Stream[IO, A] =
     events[Option[js.Any], StorageListener](api.onChanged)(changed(key, _))

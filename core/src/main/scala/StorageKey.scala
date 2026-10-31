@@ -76,8 +76,9 @@ final class StorageKeys[A : {Encoder, Decoder}]
 object StorageKeys:
 
   /** A family of values kept on this device. */
-  def local[A : {Encoder, Decoder}](prefix: String, default: A): StorageKeys[A] =
-    StorageKeys(StorageArea.Local, prefix, default)
+  def local[A : {Encoder, Decoder}]
+    (prefix: String, default: A)
+    : StorageKeys[A] = StorageKeys(StorageArea.Local, prefix, default)
 
   /** A family of values kept on every device to which the user signs in. */
   def sync[A : {Encoder, Decoder}](prefix: String, default: A): StorageKeys[A] =

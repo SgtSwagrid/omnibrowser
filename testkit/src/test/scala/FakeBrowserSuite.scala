@@ -74,11 +74,15 @@ class FakeBrowserSuite extends CatsEffectSuite:
   ):
     for
       browser <- FakeBrowser.install(Probe)
-      _       <- List("cat", "dog", "cat", "a:b")
-        .traverse_(word => browser.call(Probe.count)(word))
-      _ <- browser.store(StorageKey.local[String]("count:bird", ""), "many")
-      _ <- browser.store(StorageKey.local[Int]("counted", 0), 7)
-      _ <- browser.store(StorageKey.sync[Int]("count:cow", 0), 3)
+      _       <- List("cat", "dog", "cat", "a:b").traverse_(word =>
+        browser.call(Probe.count)(word),
+      )
+      _ <- browser.store(
+        StorageKey.local[String]("count:bird", ""),
+        "many",
+      )
+      _       <- browser.store(StorageKey.local[Int]("counted", 0), 7)
+      _       <- browser.store(StorageKey.sync[Int]("count:cow", 0), 3)
       counted <- browser.call(Probe.counted)(())
     yield assertEquals(
       counted,
