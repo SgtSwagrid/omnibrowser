@@ -98,7 +98,9 @@ private[omnibrowser] type StorageListener = js.Function2[
 @js.native
 private[omnibrowser] trait StorageAreaApi extends js.Object:
 
-  def get(keys: js.Array[String]): js.Promise[js.Dictionary[js.Any]] = js.native
+  /** The stored values of `keys`, or of every key if it is `null`. */
+  def get(keys: js.Array[String] | Null): js.Promise[js.Dictionary[js.Any]] =
+    js.native
 
   def set(items: js.Dictionary[js.Any]): js.Promise[Unit] = js.native
   def remove(keys: js.Array[String]): js.Promise[Unit]    = js.native

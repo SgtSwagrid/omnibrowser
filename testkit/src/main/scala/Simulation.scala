@@ -287,9 +287,13 @@ private[testkit] final class Simulation(runner: Runner, activity: Activity):
         .reject(js.Error("Access to storage is not allowed from this context."))
     else js.Promise.resolve(result)
 
-  /** The stored values of `keys` in `area`. */
-  def read(area: String, keys: js.Array[String]): js.Dictionary[js.Any] = js
-    .Dictionary(keys.toSeq.flatMap(key => stored(area, key).map(key -> _))*)
+  /** The stored values of `keys` in `area`, or of every key if it is `null`. */
+  def read(area: String, keys: js.Array[String] | Null): js.Dictionary[js.Any] =
+    js.Dictionary(
+      Option(keys)
+        .fold(areas(area).keys.toSeq)(_.toSeq)
+        .flatMap(key => stored(area, key).map(key -> _))*,
+    )
 
   /** The stored value of `key` in `area`, if there is one. */
   def stored(area: String, key: String): Option[js.Any] = areas(area)

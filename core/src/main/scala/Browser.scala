@@ -101,6 +101,14 @@ object Browser:
     def changes[A](key: StorageKey[A]): Stream[IO, A]
 
     /**
+      * The value of each key of `keys` that is stored, by its name after the
+      * family's prefix. A value that cannot be decoded is its key's default, as
+      * [[get]] gives it. It reads every value in the family's area, so a large
+      * value kept there under another name slows it.
+      */
+    def all[A](keys: StorageKeys[A]): IO[Map[String, A]]
+
+    /**
       * Transforms the value of `key`, and gives the new value. An update that
       * another part of the extension makes meanwhile may be lost.
       */

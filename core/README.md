@@ -41,6 +41,7 @@ Content scripts get a bundle of their own, holding only what `contentScripts()` 
 | Request of a tab | `Message.tab[Req, Res](name)` | Its content script: `serve` | The background and pages: `tabs.call` |
 | Value of a tab | `Shared.tab[A](name, default)` | Its content script: `share`, from an fs2 `Signal` | The background and pages: `tabs.get`, `tabs.values` |
 | Stored value | `StorageKey.local[A](name, default)` | Any part: `storage.set` | Any part: `storage.get`, `storage.values` |
+| Stored values of a family, a key for each name | `StorageKeys.local[A](prefix, default)`, each key `keys(name)` | Any part: `storage.set` | Any part: `storage.get`, `storage.values`, or every one stored: `storage.all(keys)` |
 
 Values are JSON, through [circe](https://circe.github.io/circe/)'s `Encoder` and `Decoder`, which `derives Codec` makes for a case class, enum or sealed trait.
 A `Long` beyond 2<sup>53</sup> loses precision, as JavaScript's numbers hold no more.
@@ -82,6 +83,7 @@ To read an old format instead, decode that too, as with circe's `Decoder#or`.
 | `tabs.values` in Firefox | Firefox may keep a port to a page in its back-forward cache open, so a watcher sees that page's last value until it returns. |
 | `grants.request` | The browser asks the user only in response to their input, so start it from a DOM event handler with `browser.run`, which runs it at once. |
 | `StorageKey.sync` | Firefox for Android and Safari keep its values on that device only. |
+| `storage.all` | It reads every value in the family's area, so a large value kept there under another name slows it. |
 | `contentScripts()` in Safari | Safari runs them on a site only once the user grants the extension access to it, from its toolbar button. |
 | `setBadgeColour` in Safari | Safari keeps its own colour. |
 | `options()` in Safari | Safari opens the options page in a tab of its own. |
@@ -92,6 +94,6 @@ To read an old format instead, decode that too, as with circe's `Decoder#or`.
 
 | Package | Holds |
 | --- | --- |
-| `com.alecdorrington.omnibrowser` | The model: `BrowserExtension` and its parts, the `Browser` each part sees, `Message`, `Shared`, `StorageKey` and `Permission` |
+| `com.alecdorrington.omnibrowser` | The model: `BrowserExtension` and its parts, the `Browser` each part sees, `Message`, `Shared`, `StorageKey`, `StorageKeys` and `Permission` |
 | `com.alecdorrington.omnibrowser.webext` | The model over the browser's own API (`WebExtensionBrowser`) |
 | `com.alecdorrington.omnibrowser.launch` | The entry points of the extension's bundles, which start each part where it runs, and give the [plugin](../sbt-omnibrowser) the manifest, bootstraps and pages for each browser |
