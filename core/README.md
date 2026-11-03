@@ -61,6 +61,7 @@ To read an old format instead, decode that too, as with circe's `Decoder#or`.
 | `Permission.Storage` | `browser.storage` |
 | `Permission.Tabs` | Every tab's URL and title |
 | `Permission.ActiveTab` | The active tab's page, when the user invokes the extension |
+| `Permission.UnlimitedStorage` | Storage beyond the browser's quotas, in `browser.storage`'s local area and the extension's own, such as IndexedDB |
 
 | Member | Declares |
 | --- | --- |
@@ -81,6 +82,7 @@ To read an old format instead, decode that too, as with circe's `Decoder#or`.
 | `tabs.values` in the background | Chromium may stop a background that only watches, so watch from a page, such as the popup. |
 | `tabs.values` in Firefox | Firefox may keep a port to a page in its back-forward cache open, so a watcher sees that page's last value until it returns. |
 | `grants.request` | The browser asks the user only in response to their input, so start it from a DOM event handler with `browser.run`, which runs it at once. |
+| `Permission.UnlimitedStorage` | Chrome and Firefox grant it only in the extension's type, never as an optional permission, and neither warns of it on installing. |
 | `StorageKey.sync` | Firefox for Android and Safari keep its values on that device only. |
 | `storage.all` | It reads every value in the family's area, so a large value kept there under another name slows it. |
 | `contentScripts()` in Safari | Safari runs them on a site only once the user grants the extension access to it, from its toolbar button. |

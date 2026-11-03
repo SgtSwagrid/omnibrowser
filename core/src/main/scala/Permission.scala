@@ -23,6 +23,14 @@ object Permission:
   /** Access to the active tab whenever the user invokes the extension. */
   sealed trait ActiveTab extends Permission
 
+  /**
+    * Storage beyond the browser's quotas, for the local area of the extension's
+    * [[Browser.Storage]] and its own stores, such as IndexedDB. It grants no
+    * API of its own. Neither Chrome nor Firefox warns of it on installing the
+    * extension, and neither can grant it as an optional permission.
+    */
+  sealed trait UnlimitedStorage extends Permission
+
 /**
   * The manifest names of the permissions in `P`, an intersection of
   * [[Permission]] types, or `Any` for none.
