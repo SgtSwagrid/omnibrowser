@@ -166,3 +166,97 @@ private[omnibrowser] trait ActionApi extends js.Object:
   def setBadgeText(details: js.Object): js.Promise[Unit]            = js.native
   def setBadgeBackgroundColor(details: js.Object): js.Promise[Unit] = js.native
   val onClicked: Event[js.Function1[TabApi, Unit]]                  = js.native
+
+/**
+  * The browser's IndexedDB, `globalThis.indexedDB`, in so far as the library
+  * uses it, which the testkit fakes. Every key is a string.
+  */
+@js.native
+private[omnibrowser] trait IdbFactoryApi extends js.Object:
+
+  def open(name: String, version: Int): IdbOpenRequestApi = js.native
+
+private[omnibrowser] object IdbFactoryApi:
+
+  /**
+    * The browser's IndexedDB, as this context's global scope has it, which a
+    * content script's is the web page's.
+    */
+  def global(): js.UndefOr[IdbFactoryApi] = js
+    .Dynamic
+    .global
+    .globalThis
+    .indexedDB
+    .asInstanceOf[js.UndefOr[IdbFactoryApi]]
+
+/** A request of IndexedDB, whose `result` is given once it succeeds. */
+@js.native
+private[omnibrowser] trait IdbRequestApi extends js.Object:
+
+  val result: js.Any = js.native
+
+  /** Why it failed, or `null` while it has not. */
+  val error: DomExceptionApi                = js.native
+  var onsuccess: js.Function1[js.Any, Unit] = js.native
+  var onerror: js.Function1[js.Any, Unit]   = js.native
+
+/** A request to open a database, which may first upgrade it. */
+@js.native
+private[omnibrowser] trait IdbOpenRequestApi extends IdbRequestApi:
+
+  var onupgradeneeded: js.Function1[js.Any, Unit] = js.native
+
+/** A connection to a database. */
+@js.native
+private[omnibrowser] trait IdbDatabaseApi extends js.Object:
+
+  val objectStoreNames: DomStringListApi = js.native
+
+  /** Makes a store, which only an upgrade may. */
+  def createObjectStore(name: String): js.Any = js.native
+
+  def transaction(stores: js.Array[String], mode: String): IdbTransactionApi =
+    js.native
+
+  def close(): Unit = js.native
+
+  /** Called when another connection asks to open a newer version. */
+  var onversionchange: js.Function1[js.Any, Unit] = js.native
+
+  /** Called when the browser closes the connection, as when data is cleared. */
+  var onclose: js.Function1[js.Any, Unit] = js.native
+
+/**
+  * A transaction over some of a database's stores, which commits once it has no
+  * requests pending when the browser turns to another task.
+  */
+@js.native
+private[omnibrowser] trait IdbTransactionApi extends js.Object:
+
+  def objectStore(name: String): IdbObjectStoreApi = js.native
+  def abort(): Unit                                = js.native
+
+  /** Why it was aborted, or `null` if it was asked to abort, or has not. */
+  val error: DomExceptionApi                 = js.native
+  var oncomplete: js.Function1[js.Any, Unit] = js.native
+  var onabort: js.Function1[js.Any, Unit]    = js.native
+
+@js.native
+private[omnibrowser] trait IdbObjectStoreApi extends js.Object:
+
+  def get(key: String): IdbRequestApi                = js.native
+  def getAll(): IdbRequestApi                        = js.native
+  def getAllKeys(): IdbRequestApi                    = js.native
+  def put(value: js.Any, key: String): IdbRequestApi = js.native
+  def delete(key: String): IdbRequestApi             = js.native
+  def clear(): IdbRequestApi                         = js.native
+
+@js.native
+private[omnibrowser] trait DomStringListApi extends js.Object:
+  def contains(name: String): Boolean = js.native
+
+@js.native
+private[omnibrowser] trait DomExceptionApi extends js.Object:
+
+  val name: String    = js.native
+  val message: String = js.native

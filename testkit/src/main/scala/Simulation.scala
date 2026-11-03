@@ -41,6 +41,13 @@ private[testkit] final class FakeContext
   /** The browser's speech, as this context sees it. */
   def speech: FakeSpeech = simulation.speaking.speech
 
+  /**
+    * The browser's IndexedDB, the extension's own, unless this context runs a
+    * content script, whose IndexedDB is the web page's, which the fake lacks.
+    */
+  def indexedDB: js.UndefOr[FakeIndexedDb] =
+    if kind.isContent then js.undefined else simulation.databases.factory
+
 /** A tab of the fake browser. */
 private[testkit] final case class FakeTab(id: Int, url: String)
 
@@ -73,6 +80,9 @@ private[testkit] final class Simulation(runner: Runner, activity: Activity):
 
   /** What the browser can say aloud, and has said. */
   val speaking: Speaking = Speaking(later)
+
+  /** The extension's databases, in the browser's IndexedDB. */
+  val databases: Databases = Databases(later, activity.fail, serialised)
 
   /** The text on the extension's badge, in tabs without their own. */
   var badge = ""

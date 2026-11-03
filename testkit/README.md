@@ -33,10 +33,13 @@ test("A page's words are added to the total."):
 | --- | --- |
 | The user | `visit(url, text)`, `navigate(tab, url, text)`, `close(tab)`, `openPopup`, `openOptions`, `clickAction`, `answerRequests(grant)` |
 | The user, on a page that `visit` or `openPopup` gave | `click(selector)`, `enter(selector, text)`, `text(selector)`, `value(selector)`, `isChecked(selector)` |
-| The browser | `restart`, `detectLanguages(text => language)` (finding none until told, and never as built for Safari, which has no detector), `listVoices(voices, late)` (none until told; `late` lists them only a moment after they are first asked for, as Chromium does) |
+| The browser | `restart`, `detectLanguages(text => language)` (finding none until told, and never as built for Safari, which has no detector), `listVoices(voices, late)` (none until told; `late` lists them only a moment after they are first asked for, as Chromium does), `refuseWrites(refuse)` (refusing each write to the extension's databases, as when it has no room, until told otherwise) |
 | A content script | `call(message)(request)` |
-| The background | `call(message, tab)(request)`, `shared(value, tab)` |
+| The background | `call(message, tab)(request)`, `shared(value, tab)`, `databases` (to read what the extension kept, or keep what an earlier version would have) |
 | Another device | `store(key, value)` |
 | A check | `stored(key)`, `badge`, `badgeOf(tab)`, `badgeColour`, `badgeColourOf(tab)`, `tabs`, `said` |
 
 Each action waits until the extension has finished responding to it, and fails if the extension failed.
+
+Node has no IndexedDB, so the fake browser keeps the extension's databases in memory, for its background, its pages and the test alike.
+As the browser's, each transaction runs alone, keeping all its writes or none, and takes requests only in the task that began it and in its requests' handlers, so code that holds one across a program's steps fails here as it would there, at least where the extension runs within the test.

@@ -3,6 +3,7 @@ package com.alecdorrington.omnibrowser
 import cats.effect.{IO, Resource}
 import fs2.Stream
 import fs2.concurrent.Signal
+import scala.collection.immutable.SortedMap
 
 /**
   * The browser, as every part of the extension sees it, its content scripts
@@ -70,6 +71,12 @@ trait Browser extends ContentBrowser:
   /** The optional permissions that the user grants while the extension runs. */
   def grants: Browser.Grants
 
+  /**
+    * The extension's databases, in the browser's IndexedDB. Content scripts
+    * have none, as theirs is the web page's.
+    */
+  def databases: Browser.Databases
+
 object Browser:
 
   /** The extension itself, and the messages between its parts. */
@@ -121,6 +128,60 @@ object Browser:
     /** The value of `key`, then each new value that it is given. */
     final def values[A](key: StorageKey[A]): Stream[IO, A] =
       Stream.eval(get(key)) ++ changes(key)
+
+  /**
+    * The extension's [[Database]]s, in the browser's IndexedDB, which its
+    * background and pages share. A content script has none, as its IndexedDB is
+    * the web page's, so it asks the background to read or write for it.
+    *
+    * Each read or write is a transaction of its own, which sees every one that
+    * completed before it, and which none sees until it completes, whole. The
+    * browser ends a transaction as soon as it turns to another task with none
+    * of its requests pending, and each step of a program may be such a turn, so
+    * none is held across steps: each makes its requests at once, or in the
+    * callbacks of those before them, and the program resumes once it completes.
+    * So [[update]] takes a function, not a program.
+    *
+    * Each database is opened the first time that it is used here, which makes
+    * or upgrades it, and kept open until a newer version of it is opened
+    * elsewhere. Cancelled, a read or write ends at once, though its transaction
+    * carries on.
+    */
+  trait Databases:
+
+    /**
+      * The values kept under `keys` in `store`, by their keys, all read at
+      * once. A key under which nothing is kept has none, as does one whose
+      * value cannot be decoded, as one that an earlier version kept otherwise,
+      * of which the console warns.
+      */
+    def get[A](store: ObjectStore[A], keys: Seq[String]): IO[Map[String, A]]
+
+    /** Every value kept in `store`, in the order of their keys, as [[get]]. */
+    def all[A](store: ObjectStore[A]): IO[SortedMap[String, A]]
+
+    /**
+      * Makes `writes`, in order, all at once, or none, failing, as when the
+      * browser has no room for them. They must be of one database, as a
+      * transaction is.
+      */
+    def write(writes: Database.Write*): IO[Unit]
+
+    /**
+      * Transforms the values kept under `keys` in `store`, all at once, and
+      * gives their new values: `transform` gives the new value of each key from
+      * its value, or none to take it out, as [[get]] reads it. Nothing else
+      * writes to them meanwhile, so no change is lost, as one to a count could
+      * be between reading and writing it.
+      */
+    def update[A]
+      (store: ObjectStore[A], keys: Seq[String])
+      (transform: (String, Option[A]) => Option[A])
+      : IO[Map[String, A]]
+
+    /** The value kept under `key` in `store`, if any, as [[get]] reads it. */
+    final def get[A](store: ObjectStore[A], key: String): IO[Option[A]] =
+      get(store, List(key)).map(_.get(key))
 
   /** The browser's tabs. */
   trait Tabs:
