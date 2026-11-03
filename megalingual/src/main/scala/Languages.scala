@@ -1,7 +1,7 @@
 package com.alecdorrington.omnibrowser.megalingual
 
 import cats.effect.IO
-import com.alecdorrington.megalingual.Language
+import com.alecdorrington.megalingual.{Language, Languages as Registry}
 import com.alecdorrington.omnibrowser.ContentBrowser
 import com.alecdorrington.omnibrowser.webext.{I18nApi, LanguageDetectionApi}
 import com.alecdorrington.omnibrowser.webext.Interop.promise
@@ -74,9 +74,10 @@ final case class Detection
 
   /**
     * The language of the most of the text, if the browser found it reliably and
-    * Megalingual knows it.
+    * it is of the `Registry` of languages, Megalingual's own unless another is
+    * given.
     */
-  def language: Option[Language] = languages
+  def language(using Registry): Option[Language] = languages
     .headOption
     .filter(_ => reliable)
     .flatMap(_.language)
@@ -93,5 +94,8 @@ object Detection:
   */
 final case class DetectedLanguage(code: String, percentage: Int) derives Codec:
 
-  /** The language, if Megalingual knows its code. */
-  def language: Option[Language] = Language.fromTag(code)
+  /**
+    * The language, if its code is of one of the `Registry` of languages,
+    * Megalingual's own unless another is given.
+    */
+  def language(using Registry): Option[Language] = Language.fromTag(code)

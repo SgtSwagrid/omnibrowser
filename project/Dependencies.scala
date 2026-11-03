@@ -11,7 +11,7 @@ object Dependencies:
     val scalajsDom = "2.8.1"
     val circe      = "0.14.17"
     val laminar    = "18.0.0-M5"
-    val megalingual = "0.4.1"
+    val megalingual = "0.5.0"
     val munit      = "1.3.6"
 
     val munitCatsEffect = "2.2.1"
