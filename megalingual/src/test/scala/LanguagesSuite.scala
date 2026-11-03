@@ -23,7 +23,7 @@ class LanguagesSuite extends CatsEffectSuite:
 
   /** What a browser whose `i18n` is `api` finds in a German text. */
   private def detect(api: js.UndefOr[js.Object]): IO[Detection] =
-    Languages(api.asInstanceOf[js.UndefOr[I18nApi]]).detect("Hallo Welt")
+    LanguageDetector(api.asInstanceOf[js.UndefOr[I18nApi]]).detect("Hallo Welt")
 
   /** An `i18n` whose detector gives what `detector` does. */
   private def detecting(detector: js.Function1[String, js.Any]): js.Object = js

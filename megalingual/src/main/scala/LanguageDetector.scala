@@ -1,7 +1,7 @@
 package com.alecdorrington.omnibrowser.megalingual
 
 import cats.effect.IO
-import com.alecdorrington.megalingual.{Language, Languages as Registry}
+import com.alecdorrington.megalingual.{Language, Languages}
 import com.alecdorrington.omnibrowser.ContentBrowser
 import com.alecdorrington.omnibrowser.webext.{I18nApi, LanguageDetectionApi}
 import com.alecdorrington.omnibrowser.webext.Interop.promise
@@ -11,14 +11,14 @@ import scala.scalajs.js
 extension (browser: ContentBrowser)
 
   /** What the browser can tell of the languages that text is written in. */
-  def languages: Languages = Languages(browser.api.i18n)
+  def languages: LanguageDetector = LanguageDetector(browser.api.i18n)
 
 /**
   * What the browser can tell of the languages that text is written in, through
   * its own detector, on the device, which needs no permission. Every part of
   * the extension has it, but in Safari, which has no detector.
   */
-final class Languages private[megalingual] (api: js.UndefOr[I18nApi]):
+final class LanguageDetector private[megalingual] (api: js.UndefOr[I18nApi]):
 
   /**
     * The languages that `text` is written in, as the browser's detector finds
@@ -34,13 +34,13 @@ final class Languages private[megalingual] (api: js.UndefOr[I18nApi]):
     *   it failed.
     */
   def detect(text: String): IO[Detection] = api
-    .filter(Languages.detects)
+    .filter(LanguageDetector.detects)
     .fold(IO.pure(Detection.none))(i18n =>
-      promise(i18n.detectLanguage(text)).map(Languages.detection),
+      promise(i18n.detectLanguage(text)).map(LanguageDetector.detection),
     )
     .handleError(_ => Detection.none)
 
-private[megalingual] object Languages:
+private[megalingual] object LanguageDetector:
 
   /** Whether the browser's `i18n` has a detector of languages. */
   private def detects(i18n: I18nApi): Boolean =
@@ -74,10 +74,12 @@ final case class Detection
 
   /**
     * The language of the most of the text, if the browser found it reliably and
-    * it is of the `Registry` of languages, Megalingual's own unless another is
-    * given.
+    * it is among those given.
+    *
+    * @param known
+    *   The languages known.
     */
-  def language(using Registry): Option[Language] = languages
+  def language(using known: Languages): Option[Language] = languages
     .headOption
     .filter(_ => reliable)
     .flatMap(_.language)
@@ -95,7 +97,10 @@ object Detection:
 final case class DetectedLanguage(code: String, percentage: Int) derives Codec:
 
   /**
-    * The language, if its code is of one of the `Registry` of languages,
-    * Megalingual's own unless another is given.
+    * The language, if its code names one of those given.
+    *
+    * @param languages
+    *   The languages known.
     */
-  def language(using Registry): Option[Language] = Language.fromTag(code)
+  def language(using languages: Languages): Option[Language] = languages
+    .fromTag(code)
