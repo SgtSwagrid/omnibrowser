@@ -94,10 +94,7 @@ final class Speech private[megalingual] (
       val utterance = SpeechSynthesisUtterance(text)
       utterance.voice = found
       utterance.lang = found.lang
-      val saying = Saying(synthesis, utterance)
-      synthesis.cancel()
-      synthesis.speak(utterance)
-      saying
+      Saying.begin(synthesis, utterance)
 
 object Speech:
 
@@ -144,11 +141,10 @@ object Speech:
   * What the browser is saying, an `utterance` of `synthesis`, which is `done`
   * once it has been said, or cut short, giving why it failed, if it did.
   */
-private final class Saying
-  (
-    synthesis: SpeechSynthesisApi,
-    utterance: SpeechSynthesisUtterance,
-  ):
+private[megalingual] final class Saying private (
+  synthesis: SpeechSynthesisApi,
+  utterance: SpeechSynthesisUtterance,
+):
 
   /** Whether it is still being said, or waiting to be. */
   private var saying = true
@@ -164,10 +160,35 @@ private final class Saying
     ),
   )
 
-  /** Stops saying it, if it is still being said. */
-  def stop(): Unit = if saying then synthesis.cancel()
+  /**
+    * Stops saying it, if it is still being said and nothing was begun after it:
+    * cancelling cuts short whatever the browser is saying, and one cut short
+    * still counts as being said until the browser tells it so, a moment after
+    * what cut it short began.
+    */
+  def stop(): Unit =
+    if saying && Saying.latest.exists(_ eq this) then synthesis.cancel()
 
-private object Saying:
+private[megalingual] object Saying:
+
+  /** What was begun last, which alone may cut the browser's speech short. */
+  private var latest = Option.empty[Saying]
+
+  /**
+    * Begins saying `utterance`, cutting short whatever `synthesis` was saying,
+    * all at once, so that it still has the user's activation.
+    */
+  def begin
+    (
+      synthesis: SpeechSynthesisApi,
+      utterance: SpeechSynthesisUtterance,
+    )
+    : Saying =
+    val saying = new Saying(synthesis, utterance)
+    latest = Some(saying)
+    synthesis.cancel()
+    synthesis.speak(utterance)
+    saying
 
   /**
     * Why an utterance failed, as its `error` event says, if it did: not if it
