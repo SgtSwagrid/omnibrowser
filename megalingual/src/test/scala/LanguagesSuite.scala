@@ -1,9 +1,11 @@
-package com.alecdorrington.omnibrowser.testkit
+package com.alecdorrington.omnibrowser.megalingual
 
 import cats.effect.IO
 import cats.syntax.all.*
+import com.alecdorrington.megalingual.Language
 import com.alecdorrington.omnibrowser.*
-import com.alecdorrington.omnibrowser.webext.{I18nApi, WebExtensionLanguages}
+import com.alecdorrington.omnibrowser.testkit.FakeBrowser
+import com.alecdorrington.omnibrowser.webext.I18nApi
 import munit.CatsEffectSuite
 import org.scalajs.dom.document
 import scala.scalajs.js
@@ -21,9 +23,7 @@ class LanguagesSuite extends CatsEffectSuite:
 
   /** What a browser whose `i18n` is `api` finds in a German text. */
   private def detect(api: js.UndefOr[js.Object]): IO[Detection] =
-    WebExtensionLanguages(api.asInstanceOf[js.UndefOr[I18nApi]]).detect(
-      "Hallo Welt",
-    )
+    Languages(api.asInstanceOf[js.UndefOr[I18nApi]]).detect("Hallo Welt")
 
   /** An `i18n` whose detector gives what `detector` does. */
   private def detecting(detector: js.Function1[String, js.Any]): js.Object = js
@@ -49,14 +49,33 @@ class LanguagesSuite extends CatsEffectSuite:
       )
       assertEquals((first, second), ("de", "?"))
 
-  test("A text's language is the one of the most of it, if found reliably."):
+  test(
+    "A text's language is the one of the most of it, if found reliably and Megalingual knows it.",
+  ):
     val mixed = List(
       DetectedLanguage("de", 80),
       DetectedLanguage("en", 20),
     )
     assertEquals(
       Detection(mixed, reliable = true).language,
-      Some("de"),
+      Some(Language.German),
+    )
+    assertEquals(
+      Detection(
+        List(DetectedLanguage("zh-TW", 100)),
+        reliable = true,
+      ).language,
+      Some(Language.TaiwaneseChinese),
+    )
+    assertEquals(
+      Detection(
+        List(
+          DetectedLanguage("und", 90),
+          DetectedLanguage("de", 10),
+        ),
+        reliable = true,
+      ).language,
+      None,
     )
     assertEquals(
       Detection(mixed, reliable = false).language,
@@ -120,5 +139,7 @@ object Linguist extends BrowserExtension[Any]:
   override def contentScripts() = Seq(ContentScript("https://*/*")(browser =>
     IO(document.body.textContent)
       .flatMap(browser.languages.detect)
-      .flatMap(found => browser.runtime.call(Linguist.found)(found.language)),
+      .flatMap(found =>
+        browser.runtime.call(Linguist.found)(found.language.map(_.code)),
+      ),
   ))

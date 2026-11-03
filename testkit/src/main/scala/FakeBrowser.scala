@@ -132,6 +132,21 @@ final class FakeBrowser private (
   def detectLanguages(language: String => Option[String]): IO[Unit] =
     IO(simulation.languageOf = language)
 
+  /**
+    * Has the browser list `voices` for speech, as soon as they are asked for,
+    * or, if `late`, only a moment after they are first asked for, as Chromium
+    * lists its own. Until told otherwise, it has none.
+    */
+  def listVoices
+    (
+      voices: List[FakeVoice],
+      late: Boolean = false,
+    )
+    : IO[Unit] = IO(simulation.speaking.list(voices, late))
+
+  /** What the browser has said, in order, each with the name of its voice. */
+  def said: IO[List[Said]] = IO(simulation.speaking.said.toList)
+
   /** The open tabs, as the extension sees them. */
   def tabs: IO[List[Tab]] = IO(
     simulation
