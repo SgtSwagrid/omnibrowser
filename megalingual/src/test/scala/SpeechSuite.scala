@@ -218,6 +218,29 @@ class SpeechSuite extends CatsEffectSuite:
         Left(SpeechError("no speech here")),
       )
 
+  test(
+    "Cancelling what was being said cuts the browser's speech short only if nothing was begun after it, which the browser has not yet told it has cut it short.",
+  ):
+    var cancels   = 0
+    val synthesis = js
+      .Dynamic
+      .literal(
+        cancel = () => cancels += 1,
+        speak = (_: js.Any) => (),
+      )
+      .asInstanceOf[SpeechSynthesisApi]
+    def utterance = js
+      .Dynamic
+      .literal(addEventListener = (_: String, _: js.Any) => ())
+      .asInstanceOf[SpeechSynthesisUtterance]
+    val first  = Saying.begin(synthesis, utterance)
+    val second = Saying.begin(synthesis, utterance)
+    assertEquals(cancels, 2)
+    first.stop()
+    assertEquals(cancels, 2)
+    second.stop()
+    assertEquals(cancels, 3)
+
 /** Lists the browser's voices, and says text in them. */
 object Speaker extends BrowserExtension[Any]:
 
