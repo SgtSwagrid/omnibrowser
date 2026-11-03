@@ -1,7 +1,7 @@
 package com.alecdorrington.omnibrowser.megalingual
 
 import cats.effect.IO
-import com.alecdorrington.megalingual.Language
+import com.alecdorrington.megalingual.{Language, Languages}
 import com.alecdorrington.omnibrowser.ContentBrowser
 import org.scalajs.dom.{Event, EventTarget}
 import scala.concurrent.duration.{DurationInt, FiniteDuration}
@@ -52,8 +52,8 @@ final class Speech private[megalingual] (
     * @return
     *   The voice, if the browser has one of the language's tree.
     */
-  def voice(language: Language): IO[Option[Voice]] =
-    voices.map(Voice.best(language, _))
+  def voice(language: Language)(using Languages): IO[Option[Voice]] = voices
+    .map(Voice.best(language, _))
 
   /**
     * Says `text` in `voice`, cutting short whatever the browser was saying,

@@ -1,6 +1,6 @@
 package com.alecdorrington.omnibrowser.megalingual
 
-import com.alecdorrington.megalingual.Language
+import com.alecdorrington.megalingual.{Language, Languages}
 import io.circe.Codec
 
 /**
@@ -28,19 +28,28 @@ final case class Voice
   )
   derives Codec:
 
-  /** The language it speaks, if Megalingual knows its tag. */
-  def language: Option[Language] = Language.fromTag(tag)
+  /** The language it speaks, if its tag is of one of `Languages`. */
+  def language(using Languages): Option[Language] = Language.fromTag(tag)
 
   /**
     * How far it is from how words of `language` are said, if it is of the same
     * tree of languages: how many steps apart in the tree its language is from
     * the variety that `language` is spoken in (see [[Voice.spoken]]), then
-    * whether it is online, then its language's place among Megalingual's.
+    * whether it is online, then its language's place among `Languages`.
     */
-  private def distance(language: Language): Option[(Int, Boolean, Int)] = this
+  private def distance
+    (language: Language)
+    (using languages: Languages)
+    : Option[(Int, Boolean, Int)] = this
     .language
     .filter(_.lineage.last == language.lineage.last)
-    .map(own => (Voice.steps(own, Voice.spoken(language)), !local, own.ordinal))
+    .map(own =>
+      (
+        Voice.steps(own, Voice.spoken(language)),
+        !local,
+        languages.all.indexOf(own),
+      ),
+    )
 
 object Voice:
 
@@ -61,7 +70,10 @@ object Voice:
     *   The voice, if any is of the language's tree, as a voice of another
     *   language would read its words as its own.
     */
-  def best(language: Language, voices: List[Voice]): Option[Voice] = voices
+  def best
+    (language: Language, voices: List[Voice])
+    (using Languages)
+    : Option[Voice] = voices
     .flatMap(voice => voice.distance(language).map(_ -> voice))
     .minByOption(_._1)
     .map(_._2)
@@ -76,7 +88,7 @@ object Voice:
     * @return
     *   Its first variety, through each level, or itself if it has none.
     */
-  def spoken(language: Language): Language = language
+  def spoken(language: Language)(using Languages): Language = language
     .children
     .headOption
     .fold(language)(spoken)
