@@ -5,8 +5,8 @@ import cats.syntax.all.*
 import com.alecdorrington.omnibrowser.*
 import com.alecdorrington.omnibrowser.launch.PageKind
 import com.alecdorrington.omnibrowser.webext.{
-  TabApi, WebExtensionApi, WebExtensionBrowser, WebExtensionStorage,
-  WebExtensionTabs,
+  IdbFactoryApi, TabApi, WebExtensionApi, WebExtensionBrowser,
+  WebExtensionStorage, WebExtensionTabs,
 }
 import com.alecdorrington.omnibrowser.webext.Circe.*
 import scala.concurrent.duration.*
@@ -25,10 +25,13 @@ final class FakeBrowser private (
 ):
 
   /** The test's own context, from which it makes requests. */
-  private lazy val tester = WebExtensionBrowser(
-    simulation.context(Kind.Test).api.asInstanceOf[WebExtensionApi],
-    activity.launch,
-  )
+  private lazy val tester =
+    val context = simulation.context(Kind.Test)
+    WebExtensionBrowser(
+      context.api.asInstanceOf[WebExtensionApi],
+      activity.launch,
+      () => context.indexedDB.asInstanceOf[js.UndefOr[IdbFactoryApi]],
+    )
 
   /**
     * Opens a tab at `url` showing `text`, into which the browser injects each
@@ -103,6 +106,22 @@ final class FakeBrowser private (
     key.area.id,
     js.Dictionary(key.name -> key.codec.encodeJs(value)),
   ))
+
+  /**
+    * The extension's databases, as its background and pages see them, through
+    * which a test reads what the extension kept, or keeps what an earlier
+    * version of it would have.
+    */
+  def databases: Browser.Databases = tester.databases
+
+  /**
+    * Has the browser refuse each later write to the extension's databases, if
+    * `refuse`, as it does once the extension has used up its quota: each
+    * transaction that writes is aborted with a `QuotaExceededError`, keeping
+    * none of its writes. Until told otherwise, it refuses none.
+    */
+  def refuseWrites(refuse: Boolean): IO[Unit] =
+    IO(simulation.databases.refusing = refuse)
 
   /** The text on the extension's badge, in tabs without their own. */
   def badge: IO[String] = IO(simulation.badge)

@@ -4,7 +4,7 @@ import cats.effect.IO
 import com.alecdorrington.omnibrowser.{BrowserExtension, Target}
 import com.alecdorrington.omnibrowser.launch.{Launcher, PageKind}
 import com.alecdorrington.omnibrowser.webext.{
-  WebExtensionApi, WebExtensionBrowser,
+  IdbFactoryApi, WebExtensionApi, WebExtensionBrowser,
 }
 import scala.scalajs.js
 import scala.util.Try
@@ -145,7 +145,15 @@ private[testkit] final class InProcess
 
   private def browser(context: FakeContext): WebExtensionBrowser =
     speak(context)
-    WebExtensionBrowser(api(context), launch)
+    WebExtensionBrowser(
+      api(context),
+      launch,
+      () => indexedDB(context),
+    )
+
+  /** The browser's IndexedDB, as `context` sees it. */
+  private def indexedDB(context: FakeContext): js.UndefOr[IdbFactoryApi] =
+    context.indexedDB.asInstanceOf[js.UndefOr[IdbFactoryApi]]
 
   /**
     * Makes the browser's speech, as `context` sees it, the global one, unless
@@ -324,7 +332,7 @@ private[testkit] final class Sandbox
     // bundle itself.
     "importScripts" ->
       (((file: String) => load(file)): js.Function1[String, Unit]),
-  ) ++
+  ) ++ context.indexedDB.toOption.map("indexedDB" -> _) ++
     Option
       .when(Sandbox.speaks(context.kind, target))(Seq(
         "speechSynthesis"          -> context.speech,

@@ -13,14 +13,15 @@ import scala.scalajs.js
 
 /**
   * The browser, through the WebExtensions API, which starts the programs that
-  * the extension runs with `launch`. It is what every part sees, though only a
-  * content script sees it as a [[TabBrowser]], and only the background and
-  * pages as a [[Browser]].
+  * the extension runs with `launch`, and the IndexedDB that `indexedDB` gives.
+  * It is what every part sees, though only a content script sees it as a
+  * [[TabBrowser]], and only the background and pages as a [[Browser]].
   */
 private[omnibrowser] final class WebExtensionBrowser
   (
     override private[omnibrowser] val api: WebExtensionApi,
     launch: IO[Unit] => Unit,
+    indexedDB: () => js.UndefOr[IdbFactoryApi] = IdbFactoryApi.global,
   )
   extends Browser, TabBrowser:
 
@@ -48,6 +49,9 @@ private[omnibrowser] final class WebExtensionBrowser
   override lazy val tabs: Browser.Tabs = WebExtensionTabs(api.tabs, api.runtime)
 
   override lazy val action: Browser.Action = WebExtensionAction(api.action)
+
+  override lazy val databases: Browser.Databases =
+    WebExtensionDatabases(indexedDB)
 
 private[omnibrowser] final class WebExtensionRuntime
   (api: RuntimeApi)
