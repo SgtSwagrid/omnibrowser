@@ -60,7 +60,7 @@ object WordCount extends BrowserExtension[Permission.Storage]:
 | [`sbt-omnibrowser`](sbt-omnibrowser) | Building it for Chromium, Firefox and Safari |
 | [`omnibrowser-testkit`](testkit) | Testing it in a fake browser |
 | [`omnibrowser-laminar`](laminar) | Writing its pages with [Laminar](https://laminar.dev) |
-| [`omnibrowser-megalingual`](megalingual) | The languages of text, and voices that say it aloud, as [Megalingual](https://github.com/SgtSwagrid/megalingual)'s languages |
+| [`omnibrowser-megalingual`](megalingual) | The languages that text is written in, as [Megalingual](https://github.com/SgtSwagrid/megalingual)'s languages |
 | [`example`](example) | An example extension, with a Laminar popup and tests (not published) |
 
 ## 👁️ See also
