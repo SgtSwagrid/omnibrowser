@@ -66,6 +66,25 @@ lazy val `omnibrowser-laminar` = project
     Npm.beforeTests,
   )
 
+/**
+  * The languages that the browser finds text written in, and its voices, which
+  * say text aloud, as Megalingual's languages.
+  */
+lazy val `omnibrowser-megalingual` = project
+  .in(file("megalingual"))
+  .dependsOn(
+    `omnibrowser-core`,
+    `omnibrowser-testkit` % Test,
+  )
+  .enablePlugins(ScalaJSPlugin)
+  .settings(
+    Linking.batchOnCi,
+    packagePrefix := s"$projectRoot.megalingual",
+    Dependencies.megalingual,
+    Dependencies.munitCatsEffect,
+    Npm.beforeTests,
+  )
+
 /** The sbt plugin that builds extensions written with the library. */
 lazy val `sbt-omnibrowser` = project
   .in(file("sbt-omnibrowser"))
@@ -102,6 +121,7 @@ lazy val omnibrowser = project
     `omnibrowser-core`,
     `omnibrowser-testkit`,
     `omnibrowser-laminar`,
+    `omnibrowser-megalingual`,
     `sbt-omnibrowser`,
     `omnibrowser-example`,
   )
@@ -111,6 +131,7 @@ lazy val omnibrowser = project
       `omnibrowser-core`,
       `omnibrowser-testkit`,
       `omnibrowser-laminar`,
+      `omnibrowser-megalingual`,
     ),
     ScalaUnidoc / unidoc / scalacOptions ++= Seq("-project", "Omnibrowser"),
   )

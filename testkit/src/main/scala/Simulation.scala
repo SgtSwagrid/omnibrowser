@@ -38,6 +38,9 @@ private[testkit] final class FakeContext
   val api: FakeApi = FakeApi(simulation, this)
   var alive        = true
 
+  /** The browser's speech, as this context sees it. */
+  def speech: FakeSpeech = simulation.speaking.speech
+
 /** A tab of the fake browser. */
 private[testkit] final case class FakeTab(id: Int, url: String)
 
@@ -67,6 +70,9 @@ private[testkit] final class Simulation(runner: Runner, activity: Activity):
 
   /** The requests that each context has yet to answer. */
   private val unanswered = mutable.Map.empty[FakeContext, List[Pending]]
+
+  /** What the browser can say aloud, and has said. */
+  val speaking: Speaking = Speaking(later)
 
   /** The text on the extension's badge, in tabs without their own. */
   var badge = ""

@@ -141,7 +141,18 @@ private[testkit] final class InProcess
     .asInstanceOf[WebExtensionApi]
 
   private def browser(context: FakeContext): WebExtensionBrowser =
+    speak(context)
     WebExtensionBrowser(api(context), launch)
+
+  /**
+    * Makes the browser's speech, as `context` sees it, the global one, unless
+    * the tests have their own.
+    */
+  private def speak(context: FakeContext): Unit =
+    if !InProcess.hasOwnSpeech then
+      js.Dynamic.global.globalThis.speechSynthesis = context.speech
+      js.Dynamic.global.globalThis.SpeechSynthesisUtterance =
+        js.constructorOf[FakeUtterance]
 
   /** Makes `document` the global document, unless the tests have a DOM. */
   private def show(document: js.Dynamic): Unit = if !InProcess.hasOwnDom then
@@ -156,6 +167,14 @@ private[testkit] object InProcess:
     */
   private lazy val hasOwnDom: Boolean =
     !js.isUndefined(js.Dynamic.global.globalThis.document)
+
+  /**
+    * Whether the tests have speech of their own, as they would in a browser,
+    * which is not to be replaced. Only the tests could have given it before it
+    * is first replaced.
+    */
+  lazy val hasOwnSpeech: Boolean =
+    !js.isUndefined(js.Dynamic.global.globalThis.speechSynthesis)
 
 /**
   * Runs an extension as `sbt-omnibrowser` built it for `target`, in
@@ -302,7 +321,14 @@ private[testkit] final class Sandbox
     // bundle itself.
     "importScripts" ->
       (((file: String) => load(file)): js.Function1[String, Unit]),
-  )
+  ) ++
+    Option
+      .when(Sandbox.speaks(context.kind, target))(Seq(
+        "speechSynthesis"          -> context.speech,
+        "SpeechSynthesisUtterance" -> js.constructorOf[FakeUtterance],
+      ))
+      .toList
+      .flatten
 
   globals.foreach((name, value) => scope.updateDynamic(name)(value))
 
@@ -338,6 +364,13 @@ private[testkit] object Sandbox:
     "TextDecoder",
     "URL",
   ).map(name => name -> js.Dynamic.global.globalThis.selectDynamic(name))
+
+  /**
+    * Whether a part of the kind `kind` has speech in `target`: all but a
+    * service worker, as Chromium's and Safari's background is.
+    */
+  private def speaks(kind: Kind, target: Target): Boolean =
+    kind != Kind.Background || target == Target.Firefox
 
   /** The global under which `target` offers the WebExtensions API. */
   private def apiName(target: Target): String = target match

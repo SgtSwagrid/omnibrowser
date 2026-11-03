@@ -33,10 +33,10 @@ test("A page's words are added to the total."):
 | --- | --- |
 | The user | `visit(url, text)`, `navigate(tab, url, text)`, `close(tab)`, `openPopup`, `openOptions`, `clickAction`, `answerRequests(grant)` |
 | The user, on a page that `visit` or `openPopup` gave | `click(selector)`, `enter(selector, text)`, `text(selector)`, `value(selector)`, `isChecked(selector)` |
-| The browser | `restart`, `detectLanguages(text => language)` (finding none until told, and never as built for Safari, which has no detector) |
+| The browser | `restart`, `detectLanguages(text => language)` (finding none until told, and never as built for Safari, which has no detector), `listVoices(voices, late)` (none until told; `late` lists them only a moment after they are first asked for, as Chromium does) |
 | A content script | `call(message)(request)` |
 | The background | `call(message, tab)(request)`, `shared(value, tab)` |
 | Another device | `store(key, value)` |
-| A check | `stored(key)`, `badge`, `badgeOf(tab)`, `badgeColour`, `badgeColourOf(tab)`, `tabs` |
+| A check | `stored(key)`, `badge`, `badgeOf(tab)`, `badgeColour`, `badgeColourOf(tab)`, `tabs`, `said` |
 
 Each action waits until the extension has finished responding to it, and fails if the extension failed.
