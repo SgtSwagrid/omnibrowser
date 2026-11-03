@@ -21,6 +21,12 @@ class PermissionsSuite extends FunSuite:
       Set.empty,
     )
 
+  test("`UnlimitedStorage` is named `unlimitedStorage`, as browsers know it."):
+    assertEquals(
+      summon[Permissions[UnlimitedStorage]].names,
+      Set("unlimitedStorage"),
+    )
+
   test("A type that is not a permission is rejected."):
     assert(compileErrors("summon[Permissions[String]]").contains(
       "String is not a permission.",
