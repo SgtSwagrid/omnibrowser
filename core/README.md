@@ -43,7 +43,7 @@ Content scripts get a bundle of their own, holding only what `contentScripts()` 
 | Stored value | `StorageKey.local[A](name, default)` | Any part: `storage.set` | Any part: `storage.get`, `storage.values` |
 | Stored values of a family, a key for each name | `StorageKeys.local[A](prefix, default)`, each key `keys(name)` | Any part: `storage.set` | Any part: `storage.get`, `storage.values`, or every one stored: `storage.all(keys)` |
 
-Values are JSON, through [circe](https://circe.github.io/circe/)'s `Encoder` and `Decoder`, which `derives Codec` makes for a case class, enum or sealed trait.
+Values are JSON, through [circe](https://circe.io/circe/)'s `Encoder` and `Decoder`, which `derives Codec` makes for a case class, enum or sealed trait.
 A `Long` beyond 2<sup>53</sup> loses precision, as JavaScript's numbers hold no more.
 A stored value that can't be decoded, as one that an earlier version stored differently, is its key's default until it is set again, and the console warns of it.
 To read an old format instead, decode that too, as with circe's `Decoder#or`.
