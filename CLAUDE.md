@@ -47,7 +47,7 @@ This is a Scala library for writing browser extensions against a typed model of 
 - The plugin makes every test run build the extension first (through `Test / jsEnvInput`, as `test` is an input task in sbt 2), and tells the tests where it is through `OMNIBROWSER_BUILD`.
 
 - `launch.AndroidSupport` lists the permissions that Firefox for Android lacks, from MDN's browser-compat-data (`webextensions/manifest/permissions.json` and `optional_permissions.json`, where `firefox_android` is `false`). Update it from there as permissions are modelled.
-- To document a new `Permission`, check the browsers' sources: Firefox warns on installing only of those in `PERMISSIONS_WITH_MESSAGE` (`toolkit/components/extensions/ExtensionPermissionMessages.sys.mjs`), and Chromium only of those with rules in `chrome/common/extensions/permissions/chrome_permission_message_rules.cc`, where `chrome_api_permissions.cc` beside it flags those that cannot be optional (`kFlagCannotBeOptional`).
+- To document a new `Permission`, check the browsers' sources: Firefox warns on installing only of those in `PERMISSIONS_WITH_MESSAGE` (`toolkit/components/extensions/ExtensionPermissionMessages.sys.mjs`), and Chromium only of those with rules in `chrome/common/extensions/permissions/chrome_permission_message_rules.cc`. Chromium flags those that cannot be optional with `kFlagCannotBeOptional`, in `chrome_api_permissions.cc` beside it or in `extensions/common/permissions/extensions_api_permissions.cc` (as `unlimitedStorage`), and drops them from `optional_permissions` with a warning; its documented list of them is incomplete, so trust the code.
 
 ### Gotchas
 
