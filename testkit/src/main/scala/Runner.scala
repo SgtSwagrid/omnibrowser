@@ -99,8 +99,11 @@ private[testkit] final class InProcess
 
   override def hasPage(kind: PageKind): Boolean = kind.of(extension).isDefined
 
-  override def startBackground(context: FakeContext): Unit = launcher
-    .background(
+  override def startBackground(context: FakeContext): Unit =
+    // The background starts as the browser does, so that every part, and the
+    // tests, have its speech, though the background may never use its own.
+    speak(context)
+    launcher.background(
       extension,
       browser(context),
       api(context),
