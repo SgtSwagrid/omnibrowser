@@ -6,13 +6,13 @@ object Dependencies:
 
   object V:
 
-    val catsEffect = "3.7.1"
-    val fs2        = "3.14.0"
-    val scalajsDom = "2.8.1"
-    val circe      = "0.14.17"
-    val laminar    = "18.0.0-M5"
-    val megalingual = "0.6.0"
-    val munit      = "1.3.6"
+    val catsEffect  = "3.7.1"
+    val fs2         = "3.14.0"
+    val scalajsDom  = "2.8.1"
+    val circe       = "0.14.17"
+    val laminar     = "18.0.0-M5"
+    val megalingual = "0.7.0"
+    val munit       = "1.3.6"
 
     val munitCatsEffect = "2.2.1"
 
@@ -27,8 +27,8 @@ object Dependencies:
     "co.fs2"        %% "fs2-core"    % V.fs2,
   )
 
-  lazy val scalajsDom =
-    libraryDependencies += "org.scala-js" %% "scalajs-dom" % V.scalajsDom
+  lazy val scalajsDom = libraryDependencies +=
+    "org.scala-js" %% "scalajs-dom" % V.scalajsDom
 
   /** Circe's codecs, and its conversions between its JSON and JavaScript's. */
   lazy val circe = libraryDependencies ++= Seq(
@@ -36,14 +36,13 @@ object Dependencies:
     "io.circe" %% "circe-scalajs" % V.circe,
   )
 
-  lazy val laminar =
-    libraryDependencies += "com.raquo" %% "laminar" % V.laminar
+  lazy val laminar = libraryDependencies += "com.raquo" %% "laminar" % V.laminar
 
-  lazy val megalingual =
-    libraryDependencies += "com.alecdorrington" %% "megalingual" % V.megalingual
+  lazy val megalingual = libraryDependencies +=
+    "com.alecdorrington" %% "megalingual" % V.megalingual
 
-  lazy val munit =
-    libraryDependencies += "org.scalameta" %% "munit" % V.munit % Test
+  lazy val munit = libraryDependencies +=
+    "org.scalameta" %% "munit" % V.munit % Test
 
   lazy val munitCatsEffect = libraryDependencies +=
     "org.typelevel" %% "munit-cats-effect" % V.munitCatsEffect % Test
