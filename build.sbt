@@ -93,7 +93,7 @@ lazy val `sbt-omnibrowser` = project
     packagePrefix := s"$projectRoot.plugin",
 
     // The Scala version that sbt itself runs on, which loads the plugin.
-    scalaVersion := "3.8.4",
+    scalaVersion := "3.9.0",
     Dependencies.scalajsPlugin,
   )
 
