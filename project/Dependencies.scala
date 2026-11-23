@@ -7,11 +7,11 @@ object Dependencies:
   object V:
 
     val catsEffect  = "3.7.1"
-    val fs2         = "3.14.0"
+    val fs2         = "3.16.0"
     val scalajsDom  = "2.8.1"
     val circe       = "0.14.17"
     val laminar     = "18.0.0-M5"
-    val megalingual = "0.7.0"
+    val megalingual = "0.7.1"
     val munit       = "1.3.6"
 
     val munitCatsEffect = "2.2.1"
